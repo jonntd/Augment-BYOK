@@ -2,6 +2,8 @@
 
 单一 VSIX：把 Augment 的 **11 个 LLM 数据面端点**按路由转到 BYOK（支持 Streaming + tool use），其它端点保持官方行为；支持运行时一键回滚（无需 Rust/外部服务）。
 
+感谢 https://ace.cctv.mba 公益服务，来源：https://linux.do/t/topic/1503600
+
 ## 安装（推荐：Releases）
 
 - GitHub Releases（tag：`rolling`）下载 `augment.vscode-augment.*-byok.*.vsix`
