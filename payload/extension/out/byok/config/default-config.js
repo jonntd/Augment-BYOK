@@ -48,6 +48,7 @@ function defaultConfig() {
         apiKey: "",
         models: ["gpt-5.2"],
         defaultModel: "gpt-5.2",
+        underlyingModelMapping: { titleGeneration: "", summary: "" },
         headers: {},
         requestDefaults: {}
       },
@@ -58,6 +59,7 @@ function defaultConfig() {
         apiKey: "",
         models: ["claude-4.6-sonnet"],
         defaultModel: "claude-4.6-sonnet",
+        underlyingModelMapping: { titleGeneration: "", summary: "" },
         headers: {},
         requestDefaults: {}
       }

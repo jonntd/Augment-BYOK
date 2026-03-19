@@ -35,6 +35,32 @@ const {
   formatHistorySummaryForPrompt
 } = require("../../augment-node-format");
 
+const TOOL_RESULT_SYSTEM_HINT_SEPARATORS = [
+  "\n\n✔️请记住",
+  "\n\n❌请记住",
+  "✔️请记住",
+  "❌请记住"
+];
+
+function splitToolResultSystemHint(text) {
+  const raw = String(text ?? "");
+  const normalized = raw.replace(/\s+$/u, "");
+  for (const sep of TOOL_RESULT_SYSTEM_HINT_SEPARATORS) {
+    const idx = sep.startsWith("\n\n") ? normalized.lastIndexOf(sep) : normalized.startsWith(sep) ? 0 : -1;
+    if (idx === -1) continue;
+    return {
+      userText: normalized.slice(0, idx).trim(),
+      systemHint: normalized.slice(idx).trim(),
+      separator: sep
+    };
+  }
+  return { userText: normalized.trim(), systemHint: "", separator: "" };
+}
+
+function stripToolResultSystemHint(text) {
+  return splitToolResultSystemHint(text).userText;
+}
+
 function isPlaceholderMessage(message) {
   const s = String(message || "").trim();
   if (!s) return false;
@@ -154,9 +180,11 @@ function summarizeToolResultText(fallbackText, contentNodes) {
     if (t === TOOL_RESULT_CONTENT_TEXT) {
       const text = normalizeString(pick(r, ["text_content", "textContent"]));
       if (!text || isPlaceholderMessage(text)) continue;
-      if (lastText && lastText === text) continue;
-      parts.push(text);
-      lastText = text;
+      const userText = stripToolResultSystemHint(text);
+      if (!userText) continue;
+      if (lastText && lastText === userText) continue;
+      parts.push(userText);
+      lastText = userText;
     } else if (t === TOOL_RESULT_CONTENT_IMAGE) {
       const img = asRecord(pick(r, ["image_content", "imageContent"]));
       const data = normalizeString(pick(img, ["image_data", "imageData"]));
@@ -166,7 +194,7 @@ function summarizeToolResultText(fallbackText, contentNodes) {
     }
   }
   if (parts.length) return parts.join("\n\n").trim();
-  return String(fallbackText || "").trim();
+  return stripToolResultSystemHint(String(fallbackText || "").trim());
 }
 
 function extractToolResultTextsFromRequestNodes(nodes) {
@@ -236,6 +264,8 @@ module.exports = {
   collectExchangeRequestNodes,
   collectExchangeOutputNodes,
   buildTextOrPartsFromSegments,
+  splitToolResultSystemHint,
+  stripToolResultSystemHint,
   summarizeToolResultText,
   extractToolResultTextsFromRequestNodes,
   extractAssistantTextFromOutputNodes,

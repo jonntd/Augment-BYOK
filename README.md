@@ -219,7 +219,8 @@
 #### 4.5 providers[]（BYOK 上游列表）
 
 - [x] 至少 1 个 provider 才能 `mode=byok` 生效
-- [x] provider 基本字段：`id` / `type` / `baseUrl` / `models[]` / `defaultModel` / `apiKey?` / `headers?` / `requestDefaults?`
+- [x] provider 基本字段：`id` / `type` / `baseUrl` / `models[]` / `defaultModel` / `apiKey?` / `headers?` / `requestDefaults?` / `underlyingModelMapping?`
+- [x] `underlyingModelMapping.titleGeneration/summary`：仅在 `silent=true` 且命中“标题生成/对话总结”内部请求时覆盖当前 provider 的模型选择
 - [x] providerId 语义：model id 形如 `byok:<providerId>:<modelId>`
 - [x] provider types（生成单一真相，见 `tools/gen/sync-provider-types.js`）：
   - [x] `openai_compatible`

@@ -37,7 +37,7 @@ async function* byokChatStream({ cfg, provider, model, requestedModel, body, tim
     type: ctx.type,
     baseUrl: ctx.baseUrl,
     apiKey: ctx.apiKey,
-    model,
+    model: ctx.model,
     req: ctx.req,
     timeoutMs,
     abortSignal,

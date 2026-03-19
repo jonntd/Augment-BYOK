@@ -15,6 +15,10 @@ test("thinking-control: shouldRequestThinking true for normal user turn", () => 
   assert.equal(shouldRequestThinking({ message: "hi" }), true);
 });
 
+test("thinking-control: shouldRequestThinking false when silent=true", () => {
+  assert.equal(shouldRequestThinking({ message: "hi", silent: true }), false);
+});
+
 test("thinking-control: isUserDialogueTurn false for tool-only continuation", () => {
   const req = {
     message: "",

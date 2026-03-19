@@ -207,7 +207,8 @@ async function* streamAugmentChatChunksByProviderType({
 }) {
   const t = normalizeString(type);
   const tl = normalizeTraceLabel(traceLabel);
-  const tools = convertToolDefinitionsByProviderType(t, req?.tool_definitions);
+  const toolDefs = req && typeof req === "object" && req.silent === true ? [] : req?.tool_definitions;
+  const tools = convertToolDefinitionsByProviderType(t, toolDefs);
 
   const label = tl ? `${tl} ${t || "unknown"}` : `${t || "unknown"}`;
   const lab = `stream/${t || "unknown"}`;

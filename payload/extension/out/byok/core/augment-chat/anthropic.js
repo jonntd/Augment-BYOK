@@ -31,9 +31,13 @@ function buildAnthropicToolResultContent(fallbackText, contentNodes) {
     if (t === TOOL_RESULT_CONTENT_TEXT) {
       const text = normalizeString(shared.pick(r, ["text_content", "textContent"]));
       if (!text || shared.isPlaceholderMessage(text)) continue;
-      if (lastText && lastText === text) continue;
-      out.push({ type: "text", text });
-      lastText = text;
+      const { userText, systemHint } = shared.splitToolResultSystemHint(text);
+      if (userText) {
+        if (lastText && lastText === userText) continue;
+        out.push({ type: "text", text: userText });
+        lastText = userText;
+      }
+      if (systemHint) continue;
     } else if (t === TOOL_RESULT_CONTENT_IMAGE) {
       const img = shared.asRecord(shared.pick(r, ["image_content", "imageContent"]));
       const data = normalizeString(shared.pick(img, ["image_data", "imageData"]));
@@ -43,7 +47,7 @@ function buildAnthropicToolResultContent(fallbackText, contentNodes) {
     }
   }
   if (out.length) return out;
-  return String(fallbackText || "");
+  return shared.stripToolResultSystemHint(String(fallbackText || ""));
 }
 
 function buildAnthropicUserContentBlocks(message, nodes, includeToolResults) {

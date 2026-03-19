@@ -3,7 +3,12 @@
 const { audit, debug, warn } = require("../../../infra/log");
 const { normalizeString, utf8ByteLen } = require("../../../infra/util");
 const { captureAugmentToolDefinitions } = require("../../../config/state");
-const { normalizeAugmentChatRequest } = require("../../../core/augment-chat");
+const {
+  normalizeAugmentChatRequest,
+  detectUnderlyingModelType,
+  UNDERLYING_MODEL_TITLE_GENERATION,
+  UNDERLYING_MODEL_SUMMARY
+} = require("../../../core/augment-chat");
 const { shouldRequestThinking, stripThinkingAndReasoningFromRequestDefaults } = require("../../../core/thinking-control");
 const { maybeSummarizeAndCompactAugmentChatRequest, deleteHistorySummaryCache } = require("../../../core/augment-history-summary/auto");
 const { mergeChatResponseMeta } = require("../../../core/chat-response-meta");
@@ -128,6 +133,26 @@ function logAugmentChatStart({ kind, requestId, provider, providerType, model, r
   debug(
     `[${label}] start${rid ? ` rid=${rid}` : ""} provider=${providerLabel(provider)} type=${normalizeString(providerType) || "unknown"} model=${normalizeString(model) || "unknown"} requestedModel=${normalizeString(requestedModel) || "unknown"} conv=${normalizeString(conversationId) || "n/a"} tool_defs=${Number(s.toolDefs) || 0} msg_len=${msgLen} has_nodes=${String(Boolean(s.hasNodes))} has_history=${String(Boolean(s.hasHistory))} has_req_nodes=${String(Boolean(s.hasReqNodes))}`
   );
+}
+
+function normalizeUnderlyingModelMapping(provider) {
+  const raw =
+    provider && typeof provider === "object" && provider.underlyingModelMapping && typeof provider.underlyingModelMapping === "object"
+      ? provider.underlyingModelMapping
+      : {};
+  return {
+    titleGeneration: normalizeString(raw.titleGeneration ?? raw.title_generation),
+    summary: normalizeString(raw.summary)
+  };
+}
+
+function resolveUnderlyingModelOverride(provider, req) {
+  const modelType = detectUnderlyingModelType(req);
+  if (!modelType) return { modelType, overrideModel: "" };
+  const mapping = normalizeUnderlyingModelMapping(provider);
+  if (modelType === UNDERLYING_MODEL_TITLE_GENERATION) return { modelType, overrideModel: mapping.titleGeneration };
+  if (modelType === UNDERLYING_MODEL_SUMMARY) return { modelType, overrideModel: mapping.summary };
+  return { modelType, overrideModel: "" };
 }
 
 async function prepareAugmentChatRequestForByok({
@@ -257,6 +282,15 @@ async function buildByokAugmentChatContext({
 
   const conversationId = normalizeString(req?.conversation_id ?? req?.conversationId ?? req?.conversationID);
 
+  let effectiveModel = normalizeString(model);
+  const { modelType: underlyingModelType, overrideModel } = resolveUnderlyingModelOverride(provider, req);
+  if (overrideModel) {
+    debug(
+      `[${label}] underlying model override: type=${underlyingModelType} provider=${providerLabel(provider)} model=${effectiveModel || "unknown"} -> ${overrideModel}`
+    );
+    effectiveModel = overrideModel;
+  }
+
   // 非用户对话轮次（例如工具回填后的 continuation）不需要上游“thinking/reasoning”，避免多次思考导致开销/中断。
   if (!shouldRequestThinking(req)) {
     requestDefaults = stripThinkingAndReasoningFromRequestDefaults(requestDefaults);
@@ -273,9 +307,9 @@ async function buildByokAugmentChatContext({
   });
 
   const summary = summarizeAugmentChatRequest(req);
-  logAugmentChatStart({ kind: label, requestId: rid, provider, providerType: type, model, requestedModel, conversationId, summary });
+  logAugmentChatStart({ kind: label, requestId: rid, provider, providerType: type, model: effectiveModel, requestedModel, conversationId, summary });
 
-  const traceLabel = `[${label}] upstream${rid ? ` rid=${rid}` : ""} provider=${providerLabel(provider)} type=${type || "unknown"} model=${normalizeString(model) || "unknown"}${delegatedSource ? ` delegate=${delegatedSource}` : ""}`;
+  const traceLabel = `[${label}] upstream${rid ? ` rid=${rid}` : ""} provider=${providerLabel(provider)} type=${type || "unknown"} model=${effectiveModel || "unknown"}${delegatedSource ? ` delegate=${delegatedSource}` : ""}`;
 
   if (isAugmentChatRequestEmpty(summary)) {
     const responseMeta = mergeChatResponseMeta();
@@ -287,6 +321,7 @@ async function buildByokAugmentChatContext({
       type,
       baseUrl,
       apiKey,
+      model: effectiveModel,
       extraHeaders,
       requestDefaults,
       req,
@@ -304,7 +339,7 @@ async function buildByokAugmentChatContext({
     req,
     requestedModel,
     fallbackProvider: provider,
-    fallbackModel: model,
+    fallbackModel: effectiveModel,
     timeoutMs,
     abortSignal,
     upstreamCompletionURL,
@@ -318,10 +353,10 @@ async function buildByokAugmentChatContext({
   // 自动推断输出上限：仅在用户未配置任何 max tokens 时注入，避免破坏用户意图。
   // 与固定默认值不同，这里会尝试基于 model 的上下文窗口（从名称推断）与 prompt 体积动态计算。
   const beforeDefaults = requestDefaults;
-  requestDefaults = maybeInjectAutoMaxOutputTokensIntoRequestDefaults(requestDefaults, { model, req });
+  requestDefaults = maybeInjectAutoMaxOutputTokensIntoRequestDefaults(requestDefaults, { model: effectiveModel, req });
   if (requestDefaults !== beforeDefaults) {
     debug(
-      `[${label}] injected auto max_output_tokens=${Number(requestDefaults.max_output_tokens) || 0} (provider=${providerLabel(provider)} type=${type || "unknown"} model=${normalizeString(model) || "unknown"})`
+      `[${label}] injected auto max_output_tokens=${Number(requestDefaults.max_output_tokens) || 0} (provider=${providerLabel(provider)} type=${type || "unknown"} model=${effectiveModel || "unknown"})`
     );
   }
 
@@ -333,6 +368,7 @@ async function buildByokAugmentChatContext({
     type,
     baseUrl,
     apiKey,
+    model: effectiveModel,
     extraHeaders,
     requestDefaults,
     req,

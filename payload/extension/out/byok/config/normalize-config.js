@@ -23,6 +23,14 @@ function asObject(v) {
   return v && typeof v === "object" && !Array.isArray(v) ? v : null;
 }
 
+function normalizeUnderlyingModelMapping(raw) {
+  const rec = asObject(raw);
+  return {
+    titleGeneration: normalizeString(rec?.titleGeneration ?? rec?.title_generation),
+    summary: normalizeString(rec?.summary)
+  };
+}
+
 function normalizeMode(v) {
   const s = normalizeString(v);
   if (s === "byok" || s === "official" || s === "disabled") return s;
@@ -173,6 +181,7 @@ function normalizeConfig(raw) {
         const apiKey = normalizeString(rec.apiKey);
         const defaultModel = normalizeString(rec.defaultModel);
         const models = normalizeStringList(rec.models, { maxItems: 10000 });
+        const underlyingModelMapping = normalizeUnderlyingModelMapping(rec.underlyingModelMapping ?? rec.underlying_model_mapping);
         const headers = rec.headers;
         const requestDefaults = rec.requestDefaults;
         if (!id || !type) return null;
@@ -187,6 +196,7 @@ function normalizeConfig(raw) {
           apiKey,
           models: finalModels,
           defaultModel: finalDefaultModel,
+          underlyingModelMapping,
           headers: headers && typeof headers === "object" && !Array.isArray(headers) ? headers : {},
           requestDefaults: requestDefaults && typeof requestDefaults === "object" && !Array.isArray(requestDefaults) ? requestDefaults : {}
         };

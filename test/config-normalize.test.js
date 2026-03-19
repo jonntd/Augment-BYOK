@@ -87,6 +87,29 @@ test("normalizeConfig: provider.models ignores non-string entries", () => {
   assert.deepEqual(cfg.providers[0].models, ["a", "b"]);
 });
 
+test("normalizeConfig: preserves provider underlying model mapping", () => {
+  const cfg = normalizeConfig({
+    providers: [
+      {
+        id: "p1",
+        type: "openai_compatible",
+        baseUrl: "https://example.invalid/v1",
+        models: ["a"],
+        defaultModel: "a",
+        underlying_model_mapping: {
+          title_generation: "m-title",
+          summary: "m-summary"
+        }
+      }
+    ]
+  });
+
+  assert.deepEqual(cfg.providers[0].underlyingModelMapping, {
+    titleGeneration: "m-title",
+    summary: "m-summary"
+  });
+});
+
 test("normalizeConfig: drops legacy officialDelegation block", () => {
   const cfg = normalizeConfig({
     officialDelegation: {

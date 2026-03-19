@@ -57,6 +57,7 @@
   - `headers`：额外请求头（对象）
   - `models`：model 列表（用于下拉选择与 `/get-models` 注入）
   - `defaultModel`：默认 model
+  - `underlyingModelMapping.titleGeneration/summary`：可选；仅用于 `silent=true` 的标题生成/对话总结内部请求
   - `requestDefaults`：按 provider.type 做兼容/过滤（见下文）
 - `routing.rules[endpoint]`：路由规则（与内置默认规则合并）
   - `mode`: `official | byok | disabled`
@@ -111,6 +112,9 @@
 - Model Picker（主面板模型选择）与 Endpoint Rules 的优先级（仅 BYOK 路径生效）
   - **model**：Model Picker 选择的 `byok:*` > `routing.rules[endpoint].model` > `providers[].defaultModel`
   - **providerId**：Model Picker 选择的 `byok:*` > `routing.rules[endpoint].providerId` > `providers[0]`
+- `silent=true` 的内部请求（例如标题生成/记忆总结）：
+  - 若 provider 配置了 `underlyingModelMapping.titleGeneration/summary`，会在上述普通选模完成后再覆盖为对应模型
+  - 识别规则对齐参考网关：按 `silent + message 特征词` 检测标题生成 / 对话总结
 - Model Picker 列表（`/get-models`）
   - 当 `runtimeEnabled=true` 且 `/get-models` 走 BYOK shim 时，返回的 `models[]` 会只包含 `byok:*`（不再混入官方模型），避免“选了官方模型但 BYOK 实际忽略”的困惑
   - 需要恢复官方模型列表：`BYOK: Disable (Rollback)`（让 `/get-models` 回到官方实现）

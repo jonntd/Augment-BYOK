@@ -58,7 +58,9 @@ function isUserDialogueTurn(req) {
 }
 
 function shouldRequestThinking(req) {
-  return isUserDialogueTurn(req) && !hasToolResultNodes(req);
+  const r = req && typeof req === "object" ? req : {};
+  if (r.silent === true) return false;
+  return isUserDialogueTurn(r) && !hasToolResultNodes(r);
 }
 
 function stripThinkingAndReasoningFromRequestDefaults(requestDefaults) {

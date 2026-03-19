@@ -12,6 +12,10 @@
       "apiKey": "sk-your-openai-api-key",
       "models": ["gpt-5.2", "gpt-5.3-codex"],
       "defaultModel": "gpt-5.2",
+      "underlyingModelMapping": {
+        "titleGeneration": "gpt-5.2",
+        "summary": "gpt-5.2"
+      },
       "headers": {},
       "requestDefaults": { "temperature": 0.2 }
     },

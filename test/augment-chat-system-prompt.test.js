@@ -25,3 +25,15 @@ test("buildSystemPrompt: includes byok_system_prompt (and keeps tool/context lin
   assert.ok(idxByok >= 0 && idxTool >= 0 && idxByok < idxTool);
 });
 
+test("buildSystemPrompt: silent request keeps context-history rule without forcing Chinese", () => {
+  const sys = buildSystemPrompt({
+    silent: true,
+    user_guidelines: "UG_SHOULD_APPEAR",
+    workspace_guidelines: "WG"
+  });
+
+  assert.ok(sys.includes("## Context History Tags"));
+  assert.ok(sys.includes("UG_SHOULD_APPEAR"));
+  assert.ok(sys.includes("WG"));
+  assert.equal(sys.includes("使用中文回复"), false);
+});

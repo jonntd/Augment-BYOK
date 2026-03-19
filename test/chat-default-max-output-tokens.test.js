@@ -9,14 +9,18 @@ test.after(() => {
   else globalThis.__augment_byok_upstream = prevUpstream;
 });
 
-function makeProvider({ type, requestDefaults }) {
+function makeProvider({ type, requestDefaults, underlyingModelMapping }) {
   return {
     id: "p1",
     type,
     baseUrl: "https://example.invalid",
     apiKey: "",
     headers: { authorization: "Bearer test" },
-    requestDefaults: requestDefaults && typeof requestDefaults === "object" ? requestDefaults : {}
+    requestDefaults: requestDefaults && typeof requestDefaults === "object" ? requestDefaults : {},
+    underlyingModelMapping:
+      underlyingModelMapping && typeof underlyingModelMapping === "object"
+        ? underlyingModelMapping
+        : { titleGeneration: "", summary: "" }
   };
 }
 
@@ -147,4 +151,22 @@ test("buildByokAugmentChatContext: invalid chat body throws (official assembler 
       }),
     /official assembler delegation failed: invalid_request_body/
   );
+});
+
+test("buildByokAugmentChatContext: silent title generation request uses provider underlying model mapping", async () => {
+  const ctx = await buildCtx({
+    kind: "chat-stream",
+    provider: makeProvider({
+      type: "openai_compatible",
+      requestDefaults: {},
+      underlyingModelMapping: { titleGeneration: "gpt-5.2-mini", summary: "gpt-5.2-summary" }
+    }),
+    body: {
+      silent: true,
+      message:
+        "Please provide a clear and concise summary of our conversation so far. The summary must be less than 6 words long."
+    }
+  });
+
+  assert.equal(ctx.model, "gpt-5.2-mini");
 });
