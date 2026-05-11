@@ -20,14 +20,14 @@ function writeUtf8(filePath, content) {
   fs.writeFileSync(filePath, content, "utf8");
 }
 
-test("webview-assets: resolves assets dir and lists extension-client-context bundles", () => {
+test("webview-assets: resolves assets dir and finds history-summary bundle by content", () => {
   withTempDir("augment-byok-webview-assets-", (dir) => {
     const extDir = path.join(dir, "extension");
     const assetsDir = path.join(extDir, "common-webviews", "assets");
-    const target = path.join(assetsDir, "extension-client-context-abc.js");
+    const target = path.join(assetsDir, "Store-abc.js");
     const ignored = path.join(assetsDir, "index-abc.js");
-    writeUtf8(target, "console.log('ok');\n");
-    writeUtf8(ignored, "console.log('ignore');\n");
+    writeUtf8(target, "const x='HISTORY_SUMMARY'; const y='history_summary_node'; const z='history_end';\n");
+    writeUtf8(ignored, "const x='HISTORY_SUMMARY';\n");
 
     assert.equal(resolveWebviewAssetsDir(extDir, "testCaller"), assetsDir);
     assert.deepEqual(listExtensionClientContextAssets(extDir, "testCaller"), [target]);

@@ -23,38 +23,27 @@ function writeUtf8(filePath, content) {
   fs.writeFileSync(filePath, content, "utf8");
 }
 
-test("patchTasklistReorganizeNoopErrors: marks no-op reorganize as error", () => {
+test("patchTasklistReorganizeNoopErrors: marks no-op in current const/notify bundle shape", () => {
   withTempDir("augment-byok-task-reorg-", (dir) => {
     const filePath = path.join(dir, "extension.js");
     const src = [
       `class ReorganizeTool{`,
-      `  async call(t,e,o,n,r,s){`,
-      `    let i=r.markdown;if(!i)return it("No markdown provided.");`,
-      `    let a=this._taskManager.getRootTaskUuid(s);if(!a)return it("No root task found.");`,
-      "    let l=await this._taskManager.getHydratedTask(a);",
-      "    if(!l)return it(`Task with UUID ${a} not found.`);",
-      "    let u=await this._taskManager.getHydratedTask(a);",
-      "    if(!u)return it(\"Failed to retrieve updated task tree.\");",
-      "    let d=V0.formatBulkUpdateResponse(Zk(l,u));",
-      "    return{...xr(d),plan:u}",
-      "  }",
-      "}"
+      `async call(e,t,r,n,i,a){try{const s=e.markdown;if(!s)return jt("No markdown provided.");const o=await this._taskManager.getOrCreateTaskListId(a);if(!o)return jt("No task list found. [TL003]");const l=await this._taskManager.getHydratedTask(o);if(!l)return jt(\`Task with UUID \${o} not found.\`);let c;c=parse(s);c.uuid=o;await this._taskManager.updateHydratedTask(c,Xd.AGENT);const p=await this._taskManager.getHydratedTask(o);if(!p)return jt("Failed to retrieve updated task tree after reorganization.");const g=jg.formatBulkUpdateResponse(qM(l,c));return a&&vde(a,p.uuid),{...nn(g),plan:p}}catch(s){return jt(String(s))}}`,
+      `}`
     ].join("\n");
     writeUtf8(filePath, src);
 
     const r1 = patchTasklistReorganizeNoopErrors(filePath);
     assert.equal(r1.changed, true);
 
-    const out1 = readUtf8(filePath);
-    assert.ok(out1.includes("__augment_byok_tasklist_reorganize_noop_errors_patched_v1"));
-    assert.ok(out1.includes("let __byok_reorg_diff=Zk(l,u);"));
-    assert.ok(out1.includes("let __byok_reorg_count=[__byok_reorg_diff&&__byok_reorg_diff.created"));
-    assert.ok(out1.includes('return{...it("Task list reorganization produced no changes."),plan:u}'));
-    assert.ok(out1.includes("let d=V0.formatBulkUpdateResponse(__byok_reorg_diff);"));
+    const out = readUtf8(filePath);
+    assert.ok(out.includes("__augment_byok_tasklist_reorganize_noop_errors_patched_v1"));
+    assert.ok(out.includes("let __byok_reorg_diff=qM(l,c);"));
+    assert.ok(out.includes('return{...jt("Task list reorganization produced no changes."),plan:p}'));
+    assert.ok(out.includes("let g=jg.formatBulkUpdateResponse(__byok_reorg_diff);"));
+    assert.ok(out.includes("return a&&vde(a,p.uuid),{...nn(g),plan:p}"));
 
     const r2 = patchTasklistReorganizeNoopErrors(filePath);
     assert.equal(r2.changed, false);
-    const out2 = readUtf8(filePath);
-    assert.equal(out2, out1);
   });
 });

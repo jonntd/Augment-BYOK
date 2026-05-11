@@ -5,12 +5,33 @@ const path = require("path");
 
 const { replaceOnceRegex } = require("../lib/patch");
 const { loadPatchText, savePatchText } = require("./patch-target");
-const { buildTaskFailuresSummarySnippet } = require("./tasklist-common");
+const { requireCapture, buildTaskFailuresSummarySnippet } = require("./tasklist-common");
 
 const MARKER = "__augment_byok_tasklist_add_tasks_errors_patched_v1";
 
-function escapeRegExp(str) {
-  return String(str || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function buildReplacement(m) {
+  const label = "tasklist add_tasks errors current";
+  const convVar = requireCapture(m, 1, `${label} convVar`);
+  const tasksVar = requireCapture(m, 2, `${label} tasksVar`);
+  const prefix = requireCapture(m, 3, `${label} prefix`);
+  const resultsVar = requireCapture(m, 4, `${label} resultsVar`);
+  const loopAndMiddle = requireCapture(m, 5, `${label} loopAndMiddle`);
+  const planVar = requireCapture(m, 6, `${label} planVar`);
+  const rootVar = requireCapture(m, 7, `${label} rootVar`);
+  const okFnVar = requireCapture(m, 8, `${label} okFnVar`);
+  const formatterVar = requireCapture(m, 9, `${label} formatterVar`);
+  const diffFnVar = requireCapture(m, 10, `${label} diffFnVar`);
+  const beforeVar = requireCapture(m, 11, `${label} beforeVar`);
+  const errFnVar = requireCapture(m, 12, `${label} errFnVar`);
+  const textVar = "__byok_add_tasks_text";
+  const insertion = buildTaskFailuresSummarySnippet({ resultsVar, errorFnVar: errFnVar, textVar, planVar });
+  return (
+    `async handleBatchCreation(${convVar},${tasksVar}){${prefix}const ${resultsVar}=[];${loopAndMiddle}` +
+    `const ${planVar}=await this._taskManager.getHydratedTask(${rootVar});` +
+    `if(!${planVar})return ${errFnVar}("Failed to retrieve updated task tree.");` +
+    `let ${textVar}=${formatterVar}.formatBulkUpdateResponse(${diffFnVar}(${beforeVar},${planVar}));` +
+    `${insertion}return{...${okFnVar}(${textVar}),plan:${planVar}}`
+  );
 }
 
 function patchTasklistAddTasksErrors(filePath) {
@@ -24,46 +45,8 @@ function patchTasklistAddTasksErrors(filePath) {
   // Patch: if any tasks fail, append failure summary; if all fail, return isError=true with details.
   next = replaceOnceRegex(
     next,
-    /async handleBatchCreation\(([A-Za-z_$][\w$]*),([A-Za-z_$][\w$]*)\)\{[\s\S]*?let\s+([A-Za-z_$][\w$]*)\s*=\s*([A-Za-z_$][\w$]*)\.formatBulkUpdateResponse\(([A-Za-z_$][\w$]*)\(([A-Za-z_$][\w$]*),([A-Za-z_$][\w$]*)\)\)\s*;[\s\S]*?return\s*\{\.\.\.([A-Za-z_$][\w$]*)\(\3\),plan:\7\}\s*\}/g,
-    (m) => {
-      const textVar = String(m[3] || "");
-      const formatterVar = String(m[4] || "");
-      const diffFnVar = String(m[5] || "");
-      const beforeVar = String(m[6] || "");
-      const afterVar = String(m[7] || "");
-      const okFnVar = String(m[8] || "");
-      if (!textVar || !formatterVar || !diffFnVar || !beforeVar || !afterVar || !okFnVar) {
-        throw new Error("tasklist add_tasks errors: capture missing");
-      }
-
-      const resultsCapture = m[0].match(/let\s+([A-Za-z_$][\w$]*)\s*=\s*\[\]\s*;\s*for\(let/);
-      const resultsVar = String(resultsCapture?.[1] || "");
-      if (!resultsVar) throw new Error("tasklist add_tasks errors: results capture missing");
-
-      const errFnCapture = m[0].match(/return\s+([A-Za-z_$][\w$]*)\("No (?:root task|task list) found[^"]*"\);/);
-      const errFnVar = String(errFnCapture?.[1] || "");
-      if (!errFnVar) throw new Error("tasklist add_tasks errors: error fn capture missing");
-
-      const oldTailRe = new RegExp(
-        `let\\s+${escapeRegExp(textVar)}\\s*=\\s*${escapeRegExp(formatterVar)}\\.formatBulkUpdateResponse\\(${escapeRegExp(diffFnVar)}\\(${escapeRegExp(
-          beforeVar
-        )},${escapeRegExp(afterVar)}\\)\\)\\s*;\\s*return\\s*\\{\\.\\.\\.${escapeRegExp(okFnVar)}\\(${escapeRegExp(textVar)}\\),plan:${escapeRegExp(
-          afterVar
-        )}\\}`,
-        "g"
-      );
-      const insertion = buildTaskFailuresSummarySnippet({
-        resultsVar,
-        errorFnVar: errFnVar,
-        textVar,
-        planVar: afterVar
-      });
-
-      const newTail = `let ${textVar}=${formatterVar}.formatBulkUpdateResponse(${diffFnVar}(${beforeVar},${afterVar}));${insertion}return{...${okFnVar}(${textVar}),plan:${afterVar}}`;
-      if (!oldTailRe.test(m[0])) throw new Error("tasklist add_tasks errors: tail not found (upstream may have changed)");
-      oldTailRe.lastIndex = 0;
-      return m[0].replace(oldTailRe, newTail);
-    },
+    /async handleBatchCreation\(([A-Za-z_$][\w$]*),([A-Za-z_$][\w$]*)\)\{([\s\S]*?)(?:let|const)\s+([A-Za-z_$][\w$]*)=\[\];([\s\S]*?)(?:let|const)\s+([A-Za-z_$][\w$]*)=await this\._taskManager\.getHydratedTask\(([A-Za-z_$][\w$]*)\);return\s+\6\?\{\.\.\.([A-Za-z_$][\w$]*)\(([A-Za-z_$][\w$]*)\.formatBulkUpdateResponse\(([A-Za-z_$][\w$]*)\(([A-Za-z_$][\w$]*),\6\)\)\),plan:\6\}:([A-Za-z_$][\w$]*)\("Failed to retrieve updated task tree\."\)/g,
+    buildReplacement,
     "tasklist add_tasks errors: handleBatchCreation"
   );
 

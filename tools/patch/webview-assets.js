@@ -15,10 +15,15 @@ function resolveWebviewAssetsDir(extensionDir, callerName) {
 
 function listExtensionClientContextAssets(extensionDir, callerName) {
   const assetsDir = resolveWebviewAssetsDir(extensionDir, callerName);
+  // Use content rather than Vite chunk names; upstream filenames are volatile.
   const candidates = fs
     .readdirSync(assetsDir)
-    .filter((name) => typeof name === "string" && name.startsWith("extension-client-context-") && name.endsWith(".js"))
-    .map((name) => path.join(assetsDir, name));
+    .filter((name) => typeof name === "string" && name.endsWith(".js") && !name.endsWith(".js.map"))
+    .map((name) => path.join(assetsDir, name))
+    .filter((filePath) => {
+      const src = fs.readFileSync(filePath, "utf8");
+      return src.includes("history_summary_node") && src.includes("HISTORY_SUMMARY") && src.includes("history_end");
+    });
 
   if (!candidates.length) throw new Error("extension-client-context asset not found (upstream may have changed)");
   return candidates;

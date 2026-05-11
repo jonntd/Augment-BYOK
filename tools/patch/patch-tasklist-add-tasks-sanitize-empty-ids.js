@@ -20,16 +20,17 @@ function patchTasklistAddTasksSanitizeEmptyIds(filePath) {
   // before calling createSingleTaskFromInput.
   next = replaceOnceRegex(
     next,
-    /for\(let\s+([A-Za-z_$][\w$]*)\s+of\s+([A-Za-z_$][\w$]*)\)try\{let\s+([A-Za-z_$][\w$]*)=await\s+this\.createSingleTaskFromInput\(([A-Za-z_$][\w$]*),\1\);/g,
+    /for\((let|const)\s+([A-Za-z_$][\w$]*)\s+of\s+([A-Za-z_$][\w$]*)\)try\{(?:let|const)\s+([A-Za-z_$][\w$]*)=await\s+this\.createSingleTaskFromInput\(([A-Za-z_$][\w$]*),\2\);/g,
     (m) => {
       const label = "tasklist add_tasks sanitize empty ids";
-      const itemVar = requireCapture(m, 1, `${label} itemVar`);
-      const tasksVar = requireCapture(m, 2, `${label} tasksVar`);
-      const resultVar = requireCapture(m, 3, `${label} resultVar`);
-      const convVar = requireCapture(m, 4, `${label} convVar`);
+      const declKind = requireCapture(m, 1, `${label} declKind`);
+      const itemVar = requireCapture(m, 2, `${label} itemVar`);
+      const tasksVar = requireCapture(m, 3, `${label} tasksVar`);
+      const resultVar = requireCapture(m, 4, `${label} resultVar`);
+      const convVar = requireCapture(m, 5, `${label} convVar`);
       const sanitize = buildSanitizeOptionalTaskIdsSnippet(itemVar);
 
-      return `for(let ${itemVar} of ${tasksVar})try{${sanitize}let ${resultVar}=await this.createSingleTaskFromInput(${convVar},${itemVar});`;
+      return `for(${declKind} ${itemVar} of ${tasksVar})try{${sanitize}const ${resultVar}=await this.createSingleTaskFromInput(${convVar},${itemVar});`;
     },
     "tasklist add_tasks sanitize empty ids: batch loop"
   );

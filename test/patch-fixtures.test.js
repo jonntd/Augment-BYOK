@@ -53,8 +53,7 @@ test("patchExtensionEntry: injects bootstrap and is idempotent", () => {
     const src = [
       `"use strict";`,
       `let a=()=>{};`,
-      `const exportsObj={activate:()=>a};`,
-      `console.log(exportsObj);`,
+      `exports.activate=a;`,
       `//# sourceMappingURL=extension.js.map`
     ].join("\n");
     writeUtf8(filePath, src);
@@ -162,11 +161,24 @@ test("patchMemoriesUpperBoundSize: injects fallback upper_bound_size and is idem
   });
 });
 
+test("patchMemoriesUpperBoundSize: no-ops when upstream remember flag read is absent", () => {
+  withTempDir("augment-byok-patch-", (dir) => {
+    const filePath = path.join(dir, "extension.js");
+    const src = [`"use strict";`, `console.log("no remember tool flag read");`].join("\n");
+    writeUtf8(filePath, src);
+
+    const r1 = patchMemoriesUpperBoundSize(filePath, { defaultUpperBoundSize: 10000 });
+    assert.equal(r1.changed, false);
+    assert.equal(r1.reason, "not_present");
+    assert.equal(readUtf8(filePath), src);
+  });
+});
+
 test("patchExposeUpstream: captures AugmentExtension instance and is idempotent", () => {
   withTempDir("augment-byok-patch-", (dir) => {
     const filePath = path.join(dir, "extension.js");
     const src = [
-      `const __exp={AugmentExtension:()=>D6,activate:()=>a};`,
+      `exports.AugmentExtension=D6;exports.activate=a;`,
       `let a=()=>{};`,
       `class D6{}`,
       `let inst=new D6(1);`,

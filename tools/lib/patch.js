@@ -130,10 +130,16 @@ function findExportedFactoryVar(src, exportName) {
   const name = String(exportName || "").trim();
   if (!name) throw new Error("findExportedFactoryVar: exportName missing");
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const re = new RegExp(`["']?${escaped}["']?\\s*:\\s*\\(\\)\\s*=>\\s*([A-Za-z0-9_$]+)`);
-  const match = String(src || "").match(re);
-  if (!match) throw new Error(`failed to locate exported ${name} var (pattern: ${name}:()=>VAR)`);
-  return match[1];
+  const s = String(src || "");
+  const patterns = [
+    new RegExp(`(?:module\\.)?exports\\.${escaped}\\s*=\\s*([A-Za-z0-9_$]+)\\b`),
+    new RegExp(`Object\\.defineProperty\\(\\s*exports\\s*,\\s*["']${escaped}["']\\s*,\\s*\\{[^}]*get\\s*:\\s*\\(\\)\\s*=>\\s*([A-Za-z0-9_$]+)`, "s")
+  ];
+  for (const re of patterns) {
+    const match = s.match(re);
+    if (match) return match[1];
+  }
+  throw new Error(`failed to locate exported ${name} var (patterns: exports.${name}=VAR, Object.defineProperty getter)`);
 }
 
 function findMatchingParen(src, openParenIdx) {

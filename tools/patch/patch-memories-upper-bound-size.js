@@ -21,6 +21,13 @@ function patchMemoriesUpperBoundSize(filePath, { defaultUpperBoundSize = 10000 }
   // Patch: add a safe default upper_bound_size if missing.
   const re = /let\s+([A-Za-z_$][0-9A-Za-z_$]*)=([A-Za-z_$][0-9A-Za-z_$]*)\(\)\.flags\.memoriesParams\.upper_bound_size;/g;
 
+  // Upstream 0.871+ removed/renamed this exact remember-tool feature-flag read.
+  // If the bundle no longer contains the relevant symbols, there is nothing to
+  // harden and failing the whole VSIX build would be overly brittle.
+  if (!original.includes("upper_bound_size") && !original.includes("memoriesParams")) {
+    return { changed: false, reason: "not_present", defaultUpperBoundSize: upper };
+  }
+
   let next = replaceOnceRegex(
     original,
     re,

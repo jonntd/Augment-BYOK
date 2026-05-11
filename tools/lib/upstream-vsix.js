@@ -23,8 +23,17 @@ async function ensureUpstreamVsix({ upstreamUrl, vsixPath, skipDownload }) {
   }
 
   if (!url) throw new Error("ensureUpstreamVsix: missing upstreamUrl");
-  await downloadFile(url, outPath);
-  return { downloaded: true, path: outPath };
+  try {
+    await downloadFile(url, outPath);
+    return { downloaded: true, path: outPath };
+  } catch (err) {
+    if (fs.existsSync(outPath)) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`[build] WARN: upstream VSIX download failed; reusing cached ${outPath}: ${msg}`);
+      return { downloaded: false, path: outPath, reusedAfterDownloadFailure: true };
+    }
+    throw err;
+  }
 }
 
 function unpackVsixToWorkDir({ repoRoot, vsixPath, workDir, clean }) {

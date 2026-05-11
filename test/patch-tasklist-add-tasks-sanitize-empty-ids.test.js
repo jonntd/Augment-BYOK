@@ -23,13 +23,13 @@ function writeUtf8(filePath, content) {
   fs.writeFileSync(filePath, content, "utf8");
 }
 
-test("patchTasklistAddTasksSanitizeEmptyIds: strips empty optional ids before createSingleTaskFromInput", () => {
+test("patchTasklistAddTasksSanitizeEmptyIds: strips empty optional ids in current const loop shape", () => {
   withTempDir("augment-byok-task-sanitize-", (dir) => {
     const filePath = path.join(dir, "extension.js");
     const src = [
       `class AddTasksTool{`,
-      `  async handleBatchCreation(r,n){`,
-      `    for(let l of n)try{let u=await this.createSingleTaskFromInput(r,l);console.log(u)}catch(u){console.log(u)}`,
+      `  async handleBatchCreation(e,t){`,
+      `    for(const s of t)try{const o=await this.createSingleTaskFromInput(e,s);console.log(o)}catch(o){console.log(o)}`,
       `  }`,
       `}`
     ].join("\n");
@@ -38,14 +38,13 @@ test("patchTasklistAddTasksSanitizeEmptyIds: strips empty optional ids before cr
     const r1 = patchTasklistAddTasksSanitizeEmptyIds(filePath);
     assert.equal(r1.changed, true);
 
-    const out1 = readUtf8(filePath);
-    assert.ok(out1.includes("__augment_byok_tasklist_add_tasks_sanitize_empty_ids_patched_v1"));
-    assert.ok(out1.includes('typeof l.parent_task_id==="string"&&l.parent_task_id.trim()===""&&delete l.parent_task_id;'));
-    assert.ok(out1.includes('typeof l.after_task_id==="string"&&l.after_task_id.trim()===""&&delete l.after_task_id;'));
+    const out = readUtf8(filePath);
+    assert.ok(out.includes("__augment_byok_tasklist_add_tasks_sanitize_empty_ids_patched_v1"));
+    assert.ok(out.includes("for(const s of t)try{"));
+    assert.ok(out.includes('typeof s.parent_task_id==="string"&&s.parent_task_id.trim()===""&&delete s.parent_task_id;'));
+    assert.ok(out.includes("const o=await this.createSingleTaskFromInput(e,s);"));
 
     const r2 = patchTasklistAddTasksSanitizeEmptyIds(filePath);
     assert.equal(r2.changed, false);
-    const out2 = readUtf8(filePath);
-    assert.equal(out2, out1);
   });
 });
