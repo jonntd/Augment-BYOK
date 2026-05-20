@@ -74,14 +74,11 @@ async function main() {
   const upstreamVersion = typeof upstreamPkg?.version === "string" ? upstreamPkg.version : "unknown";
   const buildId = sanitizeBuildId(process.env.AUGMENT_BYOK_BUILD_ID);
 
-  const interceptorInjectPath = path.join(repoRoot, "vendor", "augment-interceptor", "inject-code.augment-interceptor.v1.2.txt");
-  const interceptorInjectSha = sha256FileHex(interceptorInjectPath);
   applyByokPatches({
     repoRoot,
     extensionDir,
     pkgPath,
     extJsPath,
-    interceptorInjectPath,
     logPrefix: "build",
     buildId
   });
@@ -98,7 +95,6 @@ async function main() {
   const lockPath = path.join(distDir, "upstream.lock.json");
   writeJson(lockPath, {
     upstream: { version: upstreamVersion, url: upstreamUrl, sha256: upstreamSha },
-    interceptorInject: { file: path.relative(repoRoot, interceptorInjectPath), sha256: interceptorInjectSha },
     output: { file: outName, version: byokVersion, buildId, sha256: outSha },
     generatedAt: new Date().toISOString()
   });
@@ -106,7 +102,6 @@ async function main() {
   const stableLockPath = path.join(repoRoot, "upstream.lock.json");
   writeJson(stableLockPath, {
     upstream: { version: upstreamVersion, url: upstreamUrl, sha256: upstreamSha },
-    interceptorInject: { file: path.relative(repoRoot, interceptorInjectPath), sha256: interceptorInjectSha }
   });
 
   console.log(`[build] done: ${path.relative(repoRoot, outPath)}`);

@@ -3,9 +3,5 @@
     "version": "0.871.0",
     "url": "https://marketplace.visualstudio.com/_apis/public/gallery/publishers/augment/vsextensions/vscode-augment/latest/vspackage",
     "sha256": "46e8e716a7a90686a54354261111269a13887348b0826872ed95142ec3d73823"
-  },
-  "interceptorInject": {
-    "file": "vendor/augment-interceptor/inject-code.augment-interceptor.v1.2.txt",
-    "sha256": "b62ec7971f169d4a4d886bcde85aec14ba5f055a143705ca53390fa05df6d145"
   }
 }

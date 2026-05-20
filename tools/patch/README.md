@@ -2,7 +2,6 @@
 
 新版本的构建期补丁面严格限制在（按执行顺序）：
 
-- 注入 `vendor/augment-interceptor/inject-code.augment-interceptor.v1.2.txt`（按你的硬性要求）。
 - patch webview assets（上游 bundle 外科式替换）：
   - History Summary 节点瘦身：把巨型 `HISTORY_SUMMARY` 节点改写为 `TEXT` 节点，避免进入 Editable History 后 stringify/clone 爆炸导致 VSIX 崩溃
   - Tool Use fallback 已移除：该思路在 upstream `0.801.0` 上会导致主面板空白，不再保留构建入口或环境开关
@@ -24,7 +23,6 @@ Webview：
 - `tools/patch/patch-webview-asset-cache-bust.js`
 
 `extension/out/extension.js`：
-- `tools/patch/patch-augment-interceptor-inject.js`
 - `tools/patch/patch-extension-entry.js`
 - `tools/patch/patch-disable-chat-history-truncation.js`
 - `tools/patch/patch-expose-upstream.js`

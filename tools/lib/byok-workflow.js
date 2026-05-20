@@ -6,7 +6,6 @@ const path = require("path");
 const { copyDir } = require("./fs");
 const { run } = require("./run");
 
-const { patchAugmentInterceptorInject } = require("../patch/patch-augment-interceptor-inject");
 const { patchDisableChatHistoryTruncation } = require("../patch/patch-disable-chat-history-truncation");
 const { patchExtensionEntry } = require("../patch/patch-extension-entry");
 const { patchOfficialOverrides } = require("../patch/patch-official-overrides");
@@ -29,13 +28,12 @@ function makeLogger(prefix) {
   return (msg) => console.log(`[${p}] ${msg}`);
 }
 
-function applyByokPatches({ repoRoot, extensionDir, pkgPath, extJsPath, interceptorInjectPath, logPrefix, buildId }) {
+function applyByokPatches({ repoRoot, extensionDir, pkgPath, extJsPath, logPrefix, buildId }) {
   const log = makeLogger(logPrefix || "byok");
   const root = path.resolve(String(repoRoot || ""));
   const extDir = path.resolve(String(extensionDir || ""));
   const pkg = path.resolve(String(pkgPath || ""));
   const extJs = path.resolve(String(extJsPath || ""));
-  const injectPath = path.resolve(String(interceptorInjectPath || ""));
 
   const rel = (p) => path.relative(root, p).replace(/\\/g, "/");
 
@@ -43,7 +41,6 @@ function applyByokPatches({ repoRoot, extensionDir, pkgPath, extJsPath, intercep
   if (!extDir || extDir === path.parse(extDir).root) throw new Error("applyByokPatches: invalid extensionDir");
   if (!fs.existsSync(pkg)) throw new Error(`applyByokPatches: package.json missing: ${rel(pkg)}`);
   if (!fs.existsSync(extJs)) throw new Error(`applyByokPatches: out/extension.js missing: ${rel(extJs)}`);
-  if (!fs.existsSync(injectPath)) throw new Error(`applyByokPatches: injector missing: ${rel(injectPath)}`);
 
   log(`overlay payload (extension/out/byok/*)`);
   const payloadDir = path.join(root, "payload", "extension");
@@ -58,9 +55,6 @@ function applyByokPatches({ repoRoot, extensionDir, pkgPath, extJsPath, intercep
 
   log(`patch package.json (commands)`);
   patchPackageJsonCommands(pkg);
-
-  log(`inject augment interceptor`);
-  patchAugmentInterceptorInject(extJs, { injectPath });
 
   log(`patch entry bootstrap`);
   patchExtensionEntry(extJs);

@@ -77,7 +77,7 @@
 - [x] 单一 VSIX：所有能力都打包进一个 `*.vsix`，无需 Rust/外部代理服务
 - [x] 最小破坏面：只接管 **11 个 LLM 数据面端点**（其余端点维持 official 或按需 disabled）
 - [x] 可回滚：运行时一键回滚（`runtimeEnabled=false` 即回到官方链路）
-- [x] 可审计：锁定上游版本与关键注入物的 sha256，并产出覆盖矩阵/端点全集报告
+- [x] 可审计：锁定上游版本与产物 sha256，并产出覆盖矩阵/端点全集报告
 - [x] fail-fast：上游升级导致 patch needle / 合约不满足时，构建直接失败（避免 silent break）
 - [x] 不依赖 `augment.advanced.*` settings：构建期移除贡献点 + 运行时不读取/不写入
 - [x] 配置来源单一：只用 VS Code extension `globalState`（含 Key/Token，不参与 Sync）
@@ -95,19 +95,19 @@
 - [x] 上游 VSIX 下载/解包能力复用：`tools/lib/upstream-vsix.js`（build / analyze / contracts 共用）
 - [x] BYOK patch 编排复用：`tools/lib/byok-workflow.js`（避免构建脚本与合约脚本漂移）
 - [x] 产物输出：`dist/augment.vscode-augment.<upstreamVersion>-byok.<buildId>.vsix`
-- [x] 产物锁文件（上游+注入物 sha）：`upstream.lock.json` / `dist/upstream.lock.json`
+- [x] 产物锁文件（上游+产物 sha）：`upstream.lock.json` / `dist/upstream.lock.json`
 - [x] 端点覆盖报告：`dist/endpoint-coverage.report.md`（LLM 端点覆盖矩阵）
 - [x] 上游端点全集分析：`.cache/reports/upstream-analysis.json`（由 `npm run upstream:analyze` 生成）
 - [x] Release 资产命名去重：`dist/upstream.lock.json` 会复制为 `dist.upstream.lock.json`（仅用于 Release assets）
 
 ### 2) 构建期补丁面（Patch Surface：严格受控 & 可审计）
 
-#### 2.1 注入拦截器（injector）
+#### 2.1 入口注入（bootstrap）
 
-- [x] 注入方式：将拦截器 prepend 到上游 `extension/out/extension.js` 顶部
-- [x] 注入来源固定：`vendor/augment-interceptor/inject-code.augment-interceptor.v1.2.txt`（byte-level 固定，不在构建期改写）
-- [x] 注入脚本：`tools/patch/patch-augment-interceptor-inject.js`
-- [x] 注入一致性审计：interceptor sha256 写入 `upstream.lock.json` 与 `dist/upstream.lock.json`
+- [x] 注入方式：在上游 `extension/out/extension.js` 中注入 BYOK bootstrap
+- [x] 注入脚本：`tools/patch/patch-extension-entry.js`
+- [x] 注入一致性审计：contracts 检查 bootstrap marker，锁文件只记录上游与产物 sha
+- [x] 设计原则：不再依赖外部 `augment-interceptor` payload，不做机器指纹/会话伪造类逻辑
 
 #### 2.2 Webview 资产外科式补丁（上游 bundle 层）
 

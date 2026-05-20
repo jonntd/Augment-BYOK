@@ -5,7 +5,6 @@ const os = require("node:os");
 const path = require("node:path");
 
 const { guardNoAutoAuth } = require("../tools/patch/guard-no-autoauth");
-const { patchAugmentInterceptorInject } = require("../tools/patch/patch-augment-interceptor-inject");
 const { patchCallApiShim } = require("../tools/patch/patch-callapi-shim");
 const { patchExposeUpstream } = require("../tools/patch/patch-expose-upstream");
 const { patchExtensionEntry } = require("../tools/patch/patch-extension-entry");
@@ -197,33 +196,6 @@ test("patchExposeUpstream: captures AugmentExtension instance and is idempotent"
     assert.ok(out1.includes("globalThis.__augment_byok_upstream.officialChatDelegation=inst;"));
 
     const r2 = patchExposeUpstream(filePath);
-    assert.equal(r2.changed, false);
-    const out2 = readUtf8(filePath);
-    assert.equal(out2, out1);
-  });
-});
-
-test("patchAugmentInterceptorInject: prepends inject-code and is idempotent", () => {
-  withTempDir("augment-byok-patch-", (dir) => {
-    const filePath = path.join(dir, "extension.js");
-    writeUtf8(filePath, `console.log("upstream");\n`);
-
-    const injectPath = path.join(dir, "inject.txt");
-    const injectCode = [
-      `/* Augment Interceptor Injection Start */`,
-      `console.log("inject");`,
-      `/* Augment Interceptor Injection End */`
-    ].join("\n");
-    writeUtf8(injectPath, injectCode);
-
-    const r1 = patchAugmentInterceptorInject(filePath, { injectPath });
-    assert.equal(r1.changed, true);
-
-    const out1 = readUtf8(filePath);
-    assert.ok(out1.startsWith(injectCode));
-    assert.ok(out1.includes("__augment_byok_augment_interceptor_injected_v1"));
-
-    const r2 = patchAugmentInterceptorInject(filePath, { injectPath });
     assert.equal(r2.changed, false);
     const out2 = readUtf8(filePath);
     assert.equal(out2, out1);

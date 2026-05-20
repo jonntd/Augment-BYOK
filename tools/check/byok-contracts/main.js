@@ -134,7 +134,6 @@ function main(argv = process.argv) {
   ok("package.json commands ok");
 
   const extJs = readText(extJsPath);
-  assertContains(extJs, "__augment_byok_augment_interceptor_injected_v1", "augment interceptor injected");
   assertContains(extJs, "__augment_byok_bootstrap_injected_v1", "bootstrap injected");
   assertContains(extJs, "__augment_byok_expose_upstream_v1", "expose upstream (toolsModel) injected");
   assertContains(extJs, "__augment_byok_upstream.officialChatDelegation", "expose upstream (official chat delegation) injected");

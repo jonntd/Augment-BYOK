@@ -17,13 +17,11 @@ async function main() {
   console.log(`[contracts-check] unpack cached upstream VSIX -> ${path.relative(repoRoot, workDir)}`);
   const { extensionDir, pkgPath, extJsPath } = unpackVsixToWorkDir({ repoRoot, vsixPath: upstreamVsixPath, workDir, clean: true });
 
-  const interceptorInjectPath = path.join(repoRoot, "vendor", "augment-interceptor", "inject-code.augment-interceptor.v1.2.txt");
   applyByokPatches({
     repoRoot,
     extensionDir,
     pkgPath,
     extJsPath,
-    interceptorInjectPath,
     logPrefix: "contracts-check"
   });
   runByokContractChecks({ repoRoot, extensionDir, extJsPath, pkgPath, logPrefix: "contracts-check" });
