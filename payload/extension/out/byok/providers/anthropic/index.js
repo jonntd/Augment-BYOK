@@ -15,6 +15,15 @@ const {
   makeBackChatChunk
 } = require("../../core/augment-protocol");
 
+function hasAnthropicImageBlocks(messages) {
+  const list = Array.isArray(messages) ? messages : [];
+  for (const msg of list) {
+    const blocks = Array.isArray(msg?.content) ? msg.content : [];
+    if (blocks.some((b) => b && typeof b === "object" && normalizeString(b.type) === "image")) return true;
+  }
+  return false;
+}
+
 async function anthropicCompleteText({ baseUrl, apiKey, model, system, messages, timeoutMs, abortSignal, extraHeaders, requestDefaults }) {
   const minimalDefaults = buildMinimalRetryRequestDefaults(requestDefaults);
   const resp = await postAnthropicWithFallbacks({
@@ -87,28 +96,39 @@ async function* anthropicStreamTextDeltas({ baseUrl, apiKey, model, system, mess
 
 async function* anthropicChatStreamChunks({ baseUrl, apiKey, model, system, messages, tools, timeoutMs, abortSignal, extraHeaders, requestDefaults, toolMetaByName, supportToolUseStart, nodeIdStart }) {
   const minimalDefaults = buildMinimalRetryRequestDefaults(requestDefaults);
+  const hasImageBlocks = hasAnthropicImageBlocks(messages);
+  const noImageMessages = stripAnthropicImageBlocksFromMessages(messages);
   const strippedMessages = stripAnthropicToolBlocksFromMessages(messages, { maxToolTextLen: 8000 });
   const strippedNoImageMessages = stripAnthropicImageBlocksFromMessages(strippedMessages);
+  const attempts = [
+    {
+      labelSuffix: "",
+      request: { baseUrl, apiKey, model, system, messages, tools, extraHeaders, requestDefaults, stream: true, includeToolChoice: true },
+      retryHint: "retry without tool_choice"
+    },
+    {
+      labelSuffix: ":no-tool-choice",
+      request: { baseUrl, apiKey, model, system, messages, tools, extraHeaders, requestDefaults, stream: true, includeToolChoice: false },
+      retryHint: hasImageBlocks ? "retry without image blocks" : "retry without tools + strip tool blocks"
+    }
+  ];
+  if (hasImageBlocks) {
+    attempts.push({
+      labelSuffix: ":no-images",
+      request: { baseUrl, apiKey, model, system, messages: noImageMessages, tools, extraHeaders, requestDefaults, stream: true, includeToolChoice: false },
+      retryHint: "retry without tools + strip tool blocks"
+    });
+  }
+  attempts.push({
+    labelSuffix: ":no-tools",
+    request: { baseUrl, apiKey, model, system, messages: strippedNoImageMessages, tools: [], extraHeaders, requestDefaults: minimalDefaults, stream: true }
+  });
+
   const resp = await postAnthropicWithFallbacks({
     baseLabel: "Anthropic(chat-stream)",
     timeoutMs,
     abortSignal,
-    attempts: [
-      {
-        labelSuffix: "",
-        request: { baseUrl, apiKey, model, system, messages, tools, extraHeaders, requestDefaults, stream: true, includeToolChoice: true },
-        retryHint: "retry without tool_choice"
-      },
-      {
-        labelSuffix: ":no-tool-choice",
-        request: { baseUrl, apiKey, model, system, messages, tools, extraHeaders, requestDefaults, stream: true, includeToolChoice: false },
-        retryHint: "retry without tools + strip tool blocks"
-      },
-      {
-        labelSuffix: ":no-tools",
-        request: { baseUrl, apiKey, model, system, messages: strippedNoImageMessages, tools: [], extraHeaders, requestDefaults: minimalDefaults, stream: true }
-      }
-    ]
+    attempts
   });
 
   const contentType = normalizeString(resp?.headers?.get?.("content-type")).toLowerCase();

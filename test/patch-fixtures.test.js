@@ -94,6 +94,16 @@ test("patchCallApiShim: injects callApi/callApiStream and is idempotent", () => 
     assert.ok(out1.includes("__augment_byok_callapi_shim_patched_v1"));
     assert.ok(out1.includes(`require("./byok/runtime/shim/call-api").maybeHandleCallApi`));
     assert.ok(out1.includes(`require("./byok/runtime/shim/call-api-stream").maybeHandleCallApiStream`));
+    assert.ok(out1.includes("const __byok_host=this;"));
+    assert.ok(out1.includes("upstreamCallHost:__byok_host"));
+    assert.ok(out1.includes("upstreamApiToken:arguments[10]"));
+    assert.ok(out1.includes("upstreamCompletionURL:arguments[5]"));
+    assert.equal(out1.includes("((arguments[1]||{}).apiToken)"), false);
+    assert.equal(out1.includes("arguments[1].apiToken"), false);
+    assert.equal(out1.includes("arguments[5].toString"), false);
+    assert.equal(out1.includes("delete __byok_body.third_party_override"), false);
+    assert.equal(out1.includes("delete __byok_body.thirdPartyOverride"), false);
+    assert.equal(out1.includes("const __byok_body=arguments[3]"), false);
 
     const r2 = patchCallApiShim(filePath);
     assert.equal(r2.changed, false);

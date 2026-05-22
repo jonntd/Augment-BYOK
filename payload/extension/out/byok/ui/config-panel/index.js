@@ -26,6 +26,11 @@ function postRender(panel, cfgMgr, state) {
   post(panel, { type: "render", config: cfgMgr.get(), runtimeEnabled: Boolean(state?.runtimeEnabled) });
 }
 
+function isSelfTestCanceled(err, controller) {
+  if (err && typeof err === "object" && err.name === "AbortError") return true;
+  return Boolean(controller?.signal?.aborted);
+}
+
 function createHandlers({ vscode, ctx, cfgMgr, state, panel }) {
   let selfTestController = null;
   let selfTestRunning = false;
@@ -160,10 +165,13 @@ function createHandlers({ vscode, ctx, cfgMgr, state, panel }) {
       const requestId = normalizeString(msg?.requestId);
       const cfg = msg && typeof msg === "object" && msg.config && typeof msg.config === "object" ? msg.config : cfgMgr.get();
       const off = cfg?.official && typeof cfg.official === "object" ? cfg.official : {};
-      const completionUrl = normalizeString(off.completionUrl) || "https://ace.cctv.mba/";
+      const completionUrl = normalizeString(off.completionUrl) || "https://acemcp.heroman.wtf/relay/";
       const apiToken = normalizeRawToken(off.apiToken);
 
       try {
+        if (!apiToken) {
+          throw new Error("请先到 https://acemcp.heroman.wtf/login 注册并填写 Official API Token");
+        }
         const startedAtMs = Date.now();
         const json = await fetchOfficialGetModels({ completionURL: completionUrl, apiToken, timeoutMs: 12000 });
 
@@ -195,7 +203,7 @@ function createHandlers({ vscode, ctx, cfgMgr, state, panel }) {
         return;
       }
       try {
-        selfTestController.abort(new Error("Self Test canceled by user"));
+        selfTestController.abort();
       } catch {}
       postStatus(panel, "Self Test canceled.");
     },
@@ -230,7 +238,7 @@ function createHandlers({ vscode, ctx, cfgMgr, state, panel }) {
         });
         postStatus(panel, "Self Test finished.");
       } catch (err) {
-        if (err && typeof err === "object" && err.name === "AbortError") {
+        if (isSelfTestCanceled(err, selfTestController)) {
           post(panel, { type: "selfTestCanceled", ...(requestId ? { requestId } : {}) });
           postStatus(panel, "Self Test canceled.");
           return;

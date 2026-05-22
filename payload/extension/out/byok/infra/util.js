@@ -6,6 +6,22 @@ function normalizeString(v) {
   return s ? s : "";
 }
 
+function isPlaceholderSecretValue(v) {
+  const s = normalizeString(v);
+  if (!s) return true;
+  if (/^(Bearer|Basic)$/i.test(s) || s === "Token") return true;
+  let lower = s.toLowerCase();
+  if (lower === "<redacted>" || lower === "(redacted)" || lower === "(set)") return true;
+  lower = s.replace(/^(Bearer|Basic)\s+/i, "").trim().toLowerCase();
+  return !lower || lower === "<redacted>" || lower === "(redacted)" || lower === "(set)";
+}
+
+function normalizeSecretValue(v) {
+  const s = normalizeString(v);
+  if (!s || isPlaceholderSecretValue(s)) return "";
+  return s;
+}
+
 function normalizeStringList(raw, { maxItems } = {}) {
   const lim = Number.isFinite(Number(maxItems)) && Number(maxItems) > 0 ? Math.floor(Number(maxItems)) : 200;
   const out = [];
@@ -21,10 +37,39 @@ function normalizeStringList(raw, { maxItems } = {}) {
   return out;
 }
 
+const AUTH_HEADER_NAME_PATTERNS = [
+  /^authorization$/,
+  /^proxy-authorization$/,
+  /^x-goog-api-key$/,
+  /^(?:x-)?api[-_]?key$/,
+  /^(?:x-)?api[-_]?token$/,
+  /(?:^|[-_])auth$/,
+  /(?:^|[-_])authentication$/,
+  /(?:^|[-_])auth[-_]?token$/,
+  /(?:^|[-_])auth[-_]?key$/,
+  /(?:^|[-_])access[-_]?token$/,
+  /(?:^|[-_])refresh[-_]?token$/,
+  /(?:^|[-_])client[-_]?secret$/,
+  /(?:^|[-_])credential$/,
+  /(?:^|[-_])secret$/,
+  /(?:^|[-_])password$/,
+  /^passwd$/,
+  /^cookie$/,
+  /^set-cookie$/
+];
+
+function isAuthHeaderName(rawKey) {
+  const key = normalizeString(rawKey).toLowerCase();
+  if (!key) return false;
+  return AUTH_HEADER_NAME_PATTERNS.some((re) => re.test(key));
+}
+
 function hasAuthHeader(headers) {
   const h = headers && typeof headers === "object" && !Array.isArray(headers) ? headers : {};
-  const keys = Object.keys(h).map((k) => String(k || "").trim().toLowerCase());
-  return keys.some((k) => k === "authorization" || k === "x-api-key" || k === "api-key" || k === "x-goog-api-key");
+  for (const [rawKey, rawValue] of Object.entries(h)) {
+    if (isAuthHeaderName(rawKey) && normalizeSecretValue(rawValue)) return true;
+  }
+  return false;
 }
 
 function requireString(v, label) {
@@ -50,9 +95,9 @@ function normalizeEndpoint(endpoint) {
 }
 
 function normalizeRawToken(token) {
-  let t = normalizeString(token);
+  let t = normalizeSecretValue(token);
   if (!t) return "";
-  if (t.toLowerCase().startsWith("bearer ")) t = t.slice(7).trim();
+  t = t.replace(/^(Bearer|Basic)\s+/i, "").trim();
   const eq = t.indexOf("=");
   if (eq > 0 && eq < t.length - 1) {
     const k = t.slice(0, eq).trim();
@@ -64,6 +109,7 @@ function normalizeRawToken(token) {
       (k.endsWith("_TOKEN") || k.endsWith("_API_TOKEN") || k.endsWith("_KEY") || k.endsWith("_API_KEY"));
     if (looksLikeEnv) t = v;
   }
+  if (isPlaceholderSecretValue(t)) return "";
   return t;
 }
 
@@ -120,6 +166,21 @@ function stripByokInternalKeys(obj) {
   return out;
 }
 
+function stripUpstreamProviderOverrideKeys(obj) {
+  const raw = obj && typeof obj === "object" && !Array.isArray(obj) ? obj : {};
+  const hasOverride =
+    Object.prototype.hasOwnProperty.call(raw, "third_party_override") ||
+    Object.prototype.hasOwnProperty.call(raw, "thirdPartyOverride");
+  if (!hasOverride) return raw;
+
+  const out = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (k === "third_party_override" || k === "thirdPartyOverride") continue;
+    out[k] = v;
+  }
+  return out;
+}
+
 async function* emptyAsyncGenerator() {}
 
 function randomId() {
@@ -135,6 +196,8 @@ function randomId() {
 
 module.exports = {
   normalizeString,
+  normalizeSecretValue,
+  isAuthHeaderName,
   normalizeStringList,
   hasAuthHeader,
   requireString,
@@ -144,6 +207,7 @@ module.exports = {
   utf8ByteLen,
   safeTransform,
   stripByokInternalKeys,
+  stripUpstreamProviderOverrideKeys,
   emptyAsyncGenerator,
   randomId
 };

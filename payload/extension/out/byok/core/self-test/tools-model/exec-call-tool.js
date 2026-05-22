@@ -28,7 +28,11 @@ async function toolsModelCallTool({ toolsModel, toolName, input, conversationId,
   if (!tm) return { ok: false, detail: "toolsModel missing" };
   if (!name) return { ok: false, detail: "toolName empty" };
 
-  if (abortSignal && abortSignal.aborted) throw new Error("aborted");
+  if (abortSignal && abortSignal.aborted) {
+    const err = new Error("aborted");
+    err.name = "AbortError";
+    throw err;
+  }
 
   // 1) 尽可能走上游 safety gating（真实环境一致）
   if (typeof tm.checkToolCallSafe === "function") {
@@ -36,6 +40,7 @@ async function toolsModelCallTool({ toolsModel, toolName, input, conversationId,
       const safe = await tm.checkToolCallSafe({ toolName: name, input, agentMode: "auto" });
       if (!safe) return { ok: false, detail: "blocked_by_policy", blocked: true };
     } catch (err) {
+      if (err && typeof err === "object" && (err.name === "AbortError" || err.code === "ABORT_ERR")) throw err;
       const msg = err instanceof Error ? err.message : String(err);
       return { ok: false, detail: `checkToolCallSafe failed: ${msg}${maybeAugmentAgentsApiHint(msg)}`.trim() };
     }
@@ -54,6 +59,7 @@ async function toolsModelCallTool({ toolsModel, toolName, input, conversationId,
     emit(`[tool ${name}] ok ${sum.preview ? `preview=${sum.preview}` : ""}`.trim());
     return { ok: true, detail: sum.preview, res };
   } catch (err) {
+    if (err && typeof err === "object" && (err.name === "AbortError" || err.code === "ABORT_ERR")) throw err;
     const msg = err instanceof Error ? err.message : String(err);
     emit(`[tool ${name}] FAIL exception=${msg}`);
     return { ok: false, detail: `${msg}${maybeAugmentAgentsApiHint(msg)}`.trim() };

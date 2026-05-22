@@ -26,6 +26,8 @@ async function withTimed(labelOrFn, maybeFn) {
     if (label) debug(`[self-test] ${label} ok (${formatMs(ms)})`);
     return { ok: true, ms, res };
   } catch (err) {
+    const isAbort = Boolean(err && typeof err === "object" && (err.name === "AbortError" || err.code === "ABORT_ERR"));
+    if (isAbort) throw err;
     const m = err instanceof Error ? err.message : String(err);
     const ms = nowMs() - t0;
     if (label) debug(`[self-test] ${label} FAIL (${formatMs(ms)}): ${m}`);

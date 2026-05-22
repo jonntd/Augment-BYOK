@@ -2,7 +2,7 @@
   "use strict";
 
   const ns = (window.__byokCfgPanel = window.__byokCfgPanel || {});
-  const { normalizeStr, uniq, escapeHtml } = ns;
+  const { normalizeStr, uniq, escapeHtml, hasVisibleSecretValue } = ns;
 
   function computeOfficialTestUi(officialTest) {
     const ot = officialTest && typeof officialTest === "object" ? officialTest : {};
@@ -184,10 +184,10 @@
     const completionUrlBadge = completionUrlValid
       ? `<span class="status-badge status-badge--success">url: ok</span>`
       : `<span class="status-badge status-badge--error">url: invalid</span>`;
-    const tokenSet = Boolean(normalizeStr(off.apiToken));
+    const tokenSet = typeof hasVisibleSecretValue === "function" ? hasVisibleSecretValue(off.apiToken) : Boolean(normalizeStr(off.apiToken));
     const tokenBadge = tokenSet
       ? `<span class="status-badge status-badge--success">token: set</span>`
-      : `<span class="status-badge status-badge--warning">token: empty (optional)</span>`;
+      : `<span class="status-badge status-badge--warning">token: empty</span>`;
     const officialAssemblerBadge = `<span class="status-badge status-badge--success">assembler: official</span>`;
 
     const official = `
@@ -209,8 +209,8 @@
 	          <div class="form-grid">
 	            <div class="form-group">
 	              <label class="form-label" for="officialCompletionUrl">Completion URL</label>
-	              <input type="url" id="officialCompletionUrl" value="${escapeHtml(off.completionUrl ?? "")}" placeholder="https://ace.cctv.mba/" />
-	              <div class="text-muted text-xs">默认 <span class="text-mono">https://ace.cctv.mba/</span>；私有租户填你的域名。用于 <span class="text-mono">/get-models</span> 合并（以及官方链路请求）。</div>
+	              <input type="url" id="officialCompletionUrl" value="${escapeHtml(off.completionUrl ?? "")}" placeholder="https://acemcp.heroman.wtf/relay/" />
+	              <div class="text-muted text-xs">默认 <span class="text-mono">https://acemcp.heroman.wtf/relay/</span>；私有租户填你的域名。用于 <span class="text-mono">/get-models</span> 合并（以及官方链路请求）。</div>
 	            </div>
 		            <div class="form-group">
 		              <div class="flex-between flex-row">
@@ -221,7 +221,7 @@
 	                <input type="password" id="officialApiToken" value="" placeholder="${off.apiToken ? "(set)" : "(empty)"}" />
 	                <button class="btn btn--icon btn--danger" data-action="clearOfficialToken" title="清空 Token">✕</button>
 		              </div>
-		              <div class="text-muted text-xs"><span class="text-mono">ace.cctv.mba</span> 可用任意 token（建议改成自己的 token 做隔离）。留空=不改；点击 ✕=清空（保存后生效）。</div>
+		              <div class="text-muted text-xs">请到 <span class="text-mono">https://acemcp.heroman.wtf/login</span> 自行注册并填写 API Token；不再内置或随机分配 key。留空=不改；点击 ✕=清空（保存后生效）。</div>
 		            </div>
 		          </div>
 		        </div>

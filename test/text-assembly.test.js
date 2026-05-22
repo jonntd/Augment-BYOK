@@ -7,16 +7,17 @@ const { buildNextEditStreamRuntimeContext } = require("../payload/extension/out/
 test("text-assembly: delegated hit uses upstream body and skips endpoint extra system", async () => {
   const res = await resolveByokTextPromptContext({
     endpoint: "/completion",
-    body: { prompt: "hello from upstream body", suffix: "SUFFIX" }
+    body: {
+      messages: [
+        { role: "system", content: "SYSTEM_RULES" },
+        { role: "user", content: "hello from upstream body" }
+      ]
+    }
   });
 
-  assert.equal(res.delegatedSource, "byok.endpointFields.completion");
-  assert.equal(typeof res.system, "string");
-  assert.ok(res.system.length > 0);
-  assert.equal(Array.isArray(res.messages), true);
-  assert.equal(res.messages.length, 1);
-  assert.equal(res.messages[0].role, "user");
-  assert.ok(res.messages[0].content.includes("hello from upstream body"));
+  assert.equal(res.delegatedSource, "upstream.callApiBody.messages");
+  assert.equal(res.system, "SYSTEM_RULES");
+  assert.deepEqual(res.messages, [{ role: "user", content: "hello from upstream body" }]);
 });
 
 test("text-assembly: delegated miss with fail_open throws (no manual fallback builder)", async () => {
@@ -41,7 +42,7 @@ test("text-assembly: unsupported endpoint throws", async () => {
   );
 });
 
-test("text-assembly: next-edit-stream accepts blob plus selection-only context", async () => {
+test("text-assembly: next-edit-stream derives runtime selection but still requires upstream assembled messages", async () => {
   const { promptBody, existingCode, selectionBegin, selectionEnd } = buildNextEditStreamRuntimeContext({
     path: "src/a.js",
     blob_name: "src/a.js",
@@ -60,19 +61,18 @@ test("text-assembly: next-edit-stream accepts blob plus selection-only context",
   assert.equal(promptBody.selected_text, "1");
   assert.equal(typeof promptBody.suffix, "string");
 
-  const res = await resolveByokTextPromptContext({
-    endpoint: "/next-edit-stream",
-    body: promptBody
-  });
-
-  assert.equal(res.delegatedSource, "byok.endpointFields.next-edit-stream");
-  assert.equal(Array.isArray(res.messages), true);
-  assert.equal(res.messages.length, 1);
-  assert.ok(res.messages[0].content.includes("Selected (replace this)"));
+  await assert.rejects(
+    async () =>
+      await resolveByokTextPromptContext({
+        endpoint: "/next-edit-stream",
+        body: promptBody
+      }),
+    /official text assembler delegation failed: invalid_request_body/
+  );
 });
 
 test("text-assembly: removed endpoints are rejected", async () => {
-  for (const endpoint of ["/edit", "/generate-conversation-title"]) {
+  for (const endpoint of ["/edit", "/generate-conversation-title", "/next_edit_loc", "/instruction-stream", "/smart-paste-stream"]) {
     await assert.rejects(
       async () =>
         await resolveByokTextPromptContext({

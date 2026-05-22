@@ -3,7 +3,7 @@
 const { ensureConfigManager } = require("./state");
 const { normalizeString, normalizeRawToken } = require("../infra/util");
 
-const DEFAULT_OFFICIAL_COMPLETION_URL = "https://ace.cctv.mba/";
+const DEFAULT_OFFICIAL_COMPLETION_URL = "https://acemcp.heroman.wtf/relay/";
 
 function normalizeBaseUrl(url) {
   const s = normalizeString(url);

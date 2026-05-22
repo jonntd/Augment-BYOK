@@ -15,7 +15,7 @@
 对应脚本：
 公共 helper：
 - `tools/patch/patch-target.js`：统一处理 patch 文件读取、`already_patched` 判定、marker 写回
-- `tools/patch/webview-assets.js`：统一定位 `common-webviews/assets/extension-client-context-*.js`
+- `tools/patch/webview-assets.js`：按内容统一定位所有包含 `history_summary_node/HISTORY_SUMMARY/history_end` 的 webview JS asset
 - `tools/patch/tasklist-common.js`：tasklist 相关 snippet/capture helper
 
 Webview：

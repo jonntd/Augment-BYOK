@@ -21,19 +21,8 @@ async function* wrapChatResultTextDeltas(deltas) {
   for await (const delta of deltas) yield makeBackChatResult(delta, { nodes: [] });
 }
 
-async function* wrapInstructionTextDeltas(deltas, { meta } = {}) {
-  const m = meta && typeof meta === "object" ? meta : {};
-  yield { text: "", ...m };
-  for await (const delta of deltas) {
-    const text = coerceTextDelta(delta);
-    if (!text) continue;
-    yield { text, replacement_text: text };
-  }
-}
-
 module.exports = {
   coerceTextDelta,
   buildByokTextTraceLabel,
-  wrapChatResultTextDeltas,
-  wrapInstructionTextDeltas
+  wrapChatResultTextDeltas
 };

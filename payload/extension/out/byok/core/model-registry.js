@@ -20,17 +20,66 @@ function pickFirstString(obj, keys) {
   return "";
 }
 
+function normalizeByokModelIds(byokModelIds) {
+  const out = [];
+  const seen = new Set();
+  for (const raw of Array.isArray(byokModelIds) ? byokModelIds : []) {
+    const id = normalizeString(raw);
+    if (!id || seen.has(id) || !parseByokModelId(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
+}
+
+function filterRegistryByokOnly(registry) {
+  const src = registry && typeof registry === "object" && !Array.isArray(registry) ? registry : {};
+  const out = {};
+  for (const [k, v] of Object.entries(src)) {
+    const id = normalizeString(v);
+    if (!parseByokModelId(id)) continue;
+    out[k] = id;
+  }
+  return out;
+}
+
+function filterInfoRegistryByokOnly(infoRegistry) {
+  const src = infoRegistry && typeof infoRegistry === "object" && !Array.isArray(infoRegistry) ? infoRegistry : {};
+  const out = {};
+  for (const [k, v] of Object.entries(src)) {
+    const id = normalizeString(k);
+    if (!parseByokModelId(id)) continue;
+    out[id] = v && typeof v === "object" && !Array.isArray(v) ? v : {};
+  }
+  return out;
+}
+
+function pickByokAgentChatModel({ agentChatModel, defaultModel, existingAgent, ids } = {}) {
+  const candidates = [agentChatModel, defaultModel, existingAgent, ...(Array.isArray(ids) ? ids : [])];
+  for (const raw of candidates) {
+    const id = normalizeString(raw);
+    if (parseByokModelId(id)) return id;
+  }
+  return "";
+}
+
+function pickFraudSignEndpointsFlag(flags) {
+  if (typeof flags?.fraud_sign_endpoints === "boolean") return flags.fraud_sign_endpoints;
+  if (typeof flags?.fraudSignEndpoints === "boolean") return flags.fraudSignEndpoints;
+  return false;
+}
+
 function ensureModelRegistryFeatureFlags(existingFlags, { byokModelIds, defaultModel, agentChatModel } = {}) {
-  const dm = normalizeString(defaultModel) || "unknown";
   const flags =
     existingFlags && typeof existingFlags === "object" && !Array.isArray(existingFlags) ? { ...existingFlags } : {};
 
-  const registry = safeParseJsonObject(pickFirstString(flags, ["model_registry", "modelRegistry"]));
-  const infoRegistry = safeParseJsonObject(pickFirstString(flags, ["model_info_registry", "modelInfoRegistry"]));
+  const ids = normalizeByokModelIds(byokModelIds);
+  const dm = normalizeString(defaultModel) || ids[0] || "";
+  const registry = filterRegistryByokOnly(safeParseJsonObject(pickFirstString(flags, ["model_registry", "modelRegistry"])));
+  const infoRegistry = filterInfoRegistryByokOnly(safeParseJsonObject(pickFirstString(flags, ["model_info_registry", "modelInfoRegistry"])));
 
-  for (const raw of Array.isArray(byokModelIds) ? byokModelIds : []) {
+  for (const raw of ids) {
     const parsed = parseByokModelId(raw);
-    if (!parsed) continue;
     const displayName = `${parsed.providerId}: ${parsed.modelId}`;
     if (!registry[displayName]) registry[displayName] = raw;
     if (!infoRegistry[raw]) infoRegistry[raw] = { description: "", disabled: false, displayName, shortName: displayName };
@@ -38,7 +87,8 @@ function ensureModelRegistryFeatureFlags(existingFlags, { byokModelIds, defaultM
 
   const registryJson = JSON.stringify(registry);
   const infoRegistryJson = JSON.stringify(infoRegistry);
-  const acm = normalizeString(agentChatModel) || pickFirstString(flags, ["agent_chat_model", "agentChatModel"]) || dm;
+  const existingAgent = pickFirstString(flags, ["agent_chat_model", "agentChatModel"]);
+  const acm = pickByokAgentChatModel({ agentChatModel, defaultModel: dm, existingAgent, ids });
 
   flags.additional_chat_models = registryJson;
   flags.additionalChatModels = registryJson;
@@ -53,7 +103,7 @@ function ensureModelRegistryFeatureFlags(existingFlags, { byokModelIds, defaultM
   flags.show_thinking_summary = true;
   flags.showThinkingSummary = true;
 
-  const fraudSign = typeof flags.fraud_sign_endpoints === "boolean" ? flags.fraud_sign_endpoints : typeof flags.fraudSignEndpoints === "boolean" ? flags.fraudSignEndpoints : false;
+  const fraudSign = pickFraudSignEndpointsFlag(flags);
   flags.fraud_sign_endpoints = fraudSign;
   flags.fraudSignEndpoints = fraudSign;
 

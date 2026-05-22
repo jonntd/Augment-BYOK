@@ -6,8 +6,8 @@ function defaultConfig() {
   return {
     version: 1,
     official: {
-      completionUrl: "https://ace.cctv.mba/",
-      apiToken: "ace_byokdefault0000000000"
+      completionUrl: "https://acemcp.heroman.wtf/relay/",
+      apiToken: ""
     },
     historySummary: {
       enabled: false,
@@ -71,29 +71,20 @@ function defaultConfig() {
         "/chat": { mode: "byok" },
         "/completion": { mode: "byok" },
         "/chat-input-completion": { mode: "byok" },
-        "/next_edit_loc": { mode: "byok" },
         "/chat-stream": { mode: "byok" },
         "/prompt-enhancer": { mode: "byok" },
-        "/instruction-stream": { mode: "byok" },
-        "/smart-paste-stream": { mode: "byok" },
         "/next-edit-stream": { mode: "byok" },
         "/generate-commit-message-stream": { mode: "byok" },
         /* END GENERATED: DEFAULT_LLM_ROUTING_RULES */
 
-        "/user-secrets/list": { mode: "disabled" },
-        "/user-secrets/upsert": { mode: "disabled" },
-        "/user-secrets/delete": { mode: "disabled" },
-
         "/client-metrics": { mode: "disabled" },
         "/client-completion-timelines": { mode: "disabled" },
-        "/record-preference-sample": { mode: "disabled" },
         "/record-request-events": { mode: "official" },
         "/record-session-events": { mode: "disabled" },
         "/record-user-events": { mode: "disabled" },
         "/report-error": { mode: "official" },
         "/resolve-completions": { mode: "disabled" },
-        "/resolve-edit": { mode: "disabled" },
-        "/resolve-instruction": { mode: "disabled" }
+        "/resolve-edit": { mode: "disabled" }
       }
     }
   };

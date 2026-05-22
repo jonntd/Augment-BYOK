@@ -2,7 +2,7 @@
 
 const { debug } = require("../../infra/log");
 const { nowMs } = require("../../infra/trace");
-const { normalizeString, randomId } = require("../../infra/util");
+const { normalizeString, normalizeRawToken, randomId } = require("../../infra/util");
 const { captureAugmentToolDefinitions, getLastCapturedToolDefinitions } = require("../../config/state");
 const { summarizeToolDefs } = require("./tool-defs");
 const { getByokUpstreamGlobals, fetchLocalToolDefinitionsFromUpstream, selfTestToolsModelExec } = require("./tools-model");
@@ -208,7 +208,7 @@ async function runSelfTest({ cfg, timeoutMs, abortSignal, providerKeys, onEvent 
 
   // historySummary：用第一个可用 provider 作为 fallback（真实逻辑也是：hs.providerId 不配时 fallback 到当前 provider）
   const firstOkProvider = providersToTest.find(
-    (p) => normalizeString(p?.type) && normalizeString(p?.baseUrl) && (normalizeString(p?.apiKey) || hasAuthHeader(p?.headers))
+    (p) => normalizeString(p?.type) && normalizeString(p?.baseUrl) && (normalizeRawToken(p?.apiKey) || hasAuthHeader(p?.headers))
   );
   const fallbackProvider = firstOkProvider || providersToTest[0] || null;
   const fallbackModel = normalizeString(fallbackProvider?.defaultModel) || normalizeString(fallbackProvider?.models?.[0]) || "";

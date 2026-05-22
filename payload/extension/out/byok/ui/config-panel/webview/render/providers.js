@@ -2,7 +2,7 @@
   "use strict";
 
   const ns = (window.__byokCfgPanel = window.__byokCfgPanel || {});
-  const { normalizeStr, uniq, escapeHtml, optionHtml, validateProviderDraft, pickIssueByKey, defaultBaseUrlForProviderType } = ns;
+  const { normalizeStr, uniq, escapeHtml, optionHtml, validateProviderDraft, pickIssueByKey, defaultBaseUrlForProviderType, hasVisibleSecretValue } = ns;
 
   const KNOWN_PROVIDER_TYPES = Array.isArray(ns.KNOWN_PROVIDER_TYPES) ? ns.KNOWN_PROVIDER_TYPES : [];
 
@@ -68,7 +68,7 @@
         const type = normalizeStr(p?.type);
         const baseUrl = normalizeStr(p?.baseUrl);
         const baseUrlPlaceholder = normalizeStr(typeof defaultBaseUrlForProviderType === "function" ? defaultBaseUrlForProviderType(type) : "") || "https://api.openai.com/v1";
-        const apiKeySet = Boolean(normalizeStr(p?.apiKey));
+        const apiKeySet = typeof hasVisibleSecretValue === "function" ? hasVisibleSecretValue(p?.apiKey) : Boolean(normalizeStr(p?.apiKey));
         const dm = normalizeStr(p?.defaultModel);
         const rawModels = Array.isArray(p?.models) ? p.models : [];
         const models = uniq(rawModels.filter((m) => normalizeStr(m)));

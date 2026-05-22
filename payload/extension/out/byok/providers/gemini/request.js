@@ -2,9 +2,10 @@
 
 const { joinBaseUrl } = require("../http");
 const { normalizeString, requireString, normalizeRawToken, stripByokInternalKeys } = require("../../infra/util");
+const { truncateText, truncateTextMiddle } = require("../../infra/text");
 const { debug } = require("../../infra/log");
 const { withJsonContentType } = require("../headers");
-const { isInvalidRequestStatusForFallback } = require("../provider-util");
+const { isCompatibilityFallbackError } = require("../provider-util");
 const { fetchOkWithRetry } = require("../request-util");
 const { MAX_TOKENS_ALIAS_KEYS, pickPositiveIntFromRecord, deleteKeysFromRecord } = require("../request-defaults-util");
 
@@ -88,8 +89,75 @@ function stripGeminiInlineDataFromContents(contents, opts) {
     const rewritten = [];
     for (const p of parts) {
       if (!p || typeof p !== "object") continue;
-      if (p.inlineData && typeof p.inlineData === "object") {
+      const inlineData =
+        (p.inlineData && typeof p.inlineData === "object" ? p.inlineData : null) ||
+        (p.inline_data && typeof p.inline_data === "object" ? p.inline_data : null);
+      if (inlineData) {
         rewritten.push({ text: placeholder });
+        localChanged = true;
+      } else rewritten.push(p);
+    }
+    if (localChanged) {
+      out.push({ ...c, parts: rewritten });
+      changed = true;
+    } else out.push(c);
+  }
+
+  return { contents: changed ? out : input, changed };
+}
+
+function stringifyGeminiToolPayload(value, { maxLen, middle } = {}) {
+  if (typeof value === "string") return middle ? truncateTextMiddle(value, maxLen) : truncateText(value, maxLen);
+  try {
+    return middle ? truncateTextMiddle(JSON.stringify(value ?? {}), maxLen) : truncateText(JSON.stringify(value ?? {}), maxLen);
+  } catch {
+    return "";
+  }
+}
+
+function buildGeminiToolPartText(part, opts) {
+  const maxLen = Number.isFinite(Number(opts?.maxToolTextLen)) ? Math.floor(Number(opts.maxToolTextLen)) : 8000;
+  const fc = part?.functionCall && typeof part.functionCall === "object" ? part.functionCall : null;
+  if (fc) {
+    const name = normalizeString(fc.name);
+    const id = normalizeString(fc.id ?? fc.call_id ?? fc.callId ?? fc.tool_use_id ?? fc.toolUseId);
+    const argsText = stringifyGeminiToolPayload(fc.args ?? fc.arguments, { maxLen });
+    const header = `[tool_call${name ? ` name=${name}` : ""}${id ? ` id=${id}` : ""}]`;
+    return argsText ? `${header}\n${argsText}` : header;
+  }
+
+  const fr = part?.functionResponse && typeof part.functionResponse === "object" ? part.functionResponse : null;
+  if (!fr) return "";
+  const name = normalizeString(fr.name);
+  const id = normalizeString(fr.id ?? fr.call_id ?? fr.callId ?? fr.tool_use_id ?? fr.toolUseId);
+  const responseText = stringifyGeminiToolPayload(fr.response, { maxLen, middle: true }).trim();
+  const header = `[tool_result${name ? ` name=${name}` : ""}${id ? ` id=${id}` : ""}]`;
+  return responseText ? `${header}\n${responseText}` : header;
+}
+
+function stripGeminiToolPartsFromContents(contents, opts) {
+  const input = Array.isArray(contents) ? contents : [];
+  const out = [];
+  let changed = false;
+
+  for (const c of input) {
+    if (!c || typeof c !== "object") {
+      out.push(c);
+      continue;
+    }
+    const parts = Array.isArray(c.parts) ? c.parts : [];
+    if (!parts.length) {
+      out.push(c);
+      continue;
+    }
+
+    let localChanged = false;
+    const rewritten = [];
+    for (const p of parts) {
+      if (!p || typeof p !== "object") continue;
+      const text = buildGeminiToolPartText(p, opts);
+      if (text) {
+        rewritten.push({ text });
         localChanged = true;
       } else rewritten.push(p);
     }
@@ -117,16 +185,22 @@ async function fetchGeminiWithFallbacks({
   label
 } = {}) {
   const hasTools = Array.isArray(tools) && tools.length > 0;
+  const toolStripped = stripGeminiToolPartsFromContents(contents);
+  const hasToolParts = toolStripped.changed;
   const noImages = stripGeminiInlineDataFromContents(contents);
+  const noTools = hasTools || hasToolParts ? toolStripped : { contents, changed: false };
+  const noToolsNoImages = (hasTools || hasToolParts) && noImages.changed ? stripGeminiInlineDataFromContents(noTools.contents) : null;
 
   const attempts = [
     { labelSuffix: "", tools, requestDefaults, contents },
     { labelSuffix: ":no-defaults", tools, requestDefaults: {}, contents }
   ];
   if (noImages.changed) attempts.push({ labelSuffix: ":no-images", tools, requestDefaults: {}, contents: noImages.contents });
-  if (hasTools) {
-    attempts.push({ labelSuffix: ":no-tools", tools: [], requestDefaults: {}, contents });
-    if (noImages.changed) attempts.push({ labelSuffix: ":no-tools-no-images", tools: [], requestDefaults: {}, contents: noImages.contents });
+  if (hasTools || hasToolParts) {
+    attempts.push({ labelSuffix: ":no-tools", tools: [], requestDefaults: {}, contents: noTools.contents });
+    if (noImages.changed) {
+      attempts.push({ labelSuffix: ":no-tools-no-images", tools: [], requestDefaults: {}, contents: noToolsNoImages.contents });
+    }
   }
 
   let lastErr = null;
@@ -150,7 +224,7 @@ async function fetchGeminiWithFallbacks({
     } catch (err) {
       lastErr = err;
       const status = err && typeof err === "object" ? Number(err.status) : NaN;
-      const canFallback = isInvalidRequestStatusForFallback(err?.status);
+      const canFallback = isCompatibilityFallbackError(err);
       const hasNext = i + 1 < attempts.length;
       if (!canFallback || !hasNext) throw err;
       debug(`${lab} fallback: retry (status=${Number.isFinite(status) ? status : "unknown"})`);

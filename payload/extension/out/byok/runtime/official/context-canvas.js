@@ -1,12 +1,11 @@
 "use strict";
 
 const { debug, warn } = require("../../infra/log");
-const { normalizeString, normalizeRawToken } = require("../../infra/util");
+const { normalizeString } = require("../../infra/util");
 const { truncateTextForPrompt: truncateText } = require("../../infra/text");
-const { getOfficialConnection } = require("../../config/official");
 const { joinBaseUrl, safeFetch } = require("../../providers/http");
 const { readHttpErrorDetail } = require("../../providers/request-util");
-const { makeTextRequestNode, pickInjectionTargetArray, maybeInjectUserExtraTextParts } = require("./common");
+const { makeTextRequestNode, pickInjectionTargetArray, maybeInjectUserExtraTextParts, isOfficialContextDisabled, resolveOfficialContextConnection } = require("./common");
 
 const OFFICIAL_CONTEXT_CANVAS_TIMEOUT_MS = 4000;
 const CONTEXT_CANVAS_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -119,18 +118,14 @@ function getCanvasFromCache(completionURL, canvasId) {
 
 async function maybeInjectOfficialContextCanvas({ req, timeoutMs, abortSignal, upstreamCompletionURL, upstreamApiToken }) {
   if (!req || typeof req !== "object") return false;
-  if (req.disable_retrieval === true) return false;
+  if (isOfficialContextDisabled(req)) return false;
 
   const canvasId = normalizeString(req.canvas_id);
   if (!canvasId) return false;
 
-  const off = getOfficialConnection();
-  const completionURL = normalizeString(upstreamCompletionURL) || off.completionURL;
-  const apiToken = normalizeRawToken(upstreamApiToken) || off.apiToken;
-  if (!completionURL || !apiToken) {
-    debug("officialContextCanvas skipped: missing completionURL/apiToken");
-    return false;
-  }
+  const conn = resolveOfficialContextConnection({ feature: "context-canvas", upstreamCompletionURL, upstreamApiToken });
+  if (!conn) return false;
+  const { completionURL, apiToken } = conn;
 
   try {
     let canvas = getCanvasFromCache(completionURL, canvasId);
@@ -182,4 +177,3 @@ async function maybeInjectOfficialContextCanvas({ req, timeoutMs, abortSignal, u
 }
 
 module.exports = { maybeInjectOfficialContextCanvas };
-

@@ -7,20 +7,7 @@ const path = require("path");
 const { getArgValue, hasFlag } = require("../lib/cli-args");
 const { ensureDir, rmDir, readJson, writeJson } = require("../lib/fs");
 const { DEFAULT_UPSTREAM_VSIX_URL, DEFAULT_UPSTREAM_VSIX_REL_PATH, ensureUpstreamVsix, unpackVsixToWorkDir } = require("../lib/upstream-vsix");
-
-function extractCallApiEndpoints(src) {
-  const endpoints = new Map();
-  const re = /\bcallApi(Stream)?\s*\(\s*[^,]+,\s*[^,]+,\s*"([^"]+)"/g;
-  for (const m of src.matchAll(re)) {
-    const kind = m[1] ? "callApiStream" : "callApi";
-    const epRaw = m[2] || "";
-    const ep = epRaw.startsWith("/") ? epRaw : "/" + epRaw;
-    const v = endpoints.get(ep) || { callApi: 0, callApiStream: 0 };
-    v[kind] += 1;
-    endpoints.set(ep, v);
-  }
-  return endpoints;
-}
+const { extractCallApiEndpoints } = require("../lib/endpoint-analysis");
 
 async function main() {
   const repoRoot = path.resolve(__dirname, "../..");

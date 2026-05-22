@@ -88,20 +88,6 @@ function validateSpecs(specs) {
   return list;
 }
 
-function formatEndpointListMd(endpoints) {
-  const xs = Array.isArray(endpoints) ? endpoints : [];
-  return xs.map((ep) => `\`${ep}\``).join("、") || "-";
-}
-
-function generateDocsBlock(specs) {
-  const callApi = specs.filter((s) => s.kind === "callApi").map((s) => s.endpoint);
-  const callApiStream = specs.filter((s) => s.kind === "callApiStream").map((s) => s.endpoint);
-  return [
-    `- \`callApi\`（${callApi.length}）：${formatEndpointListMd(callApi)}`,
-    `- \`callApiStream\`（${callApiStream.length}）：${formatEndpointListMd(callApiStream)}`
-  ].join("\n");
-}
-
 function generateUiEndpointsBlock(specs, indent) {
   const xs = specs.map((s) => s.endpoint);
   return xs
@@ -133,31 +119,9 @@ function main() {
   const officialChatSpecs = specs.filter((s) => s.endpoint === "/chat" || s.endpoint === "/chat-stream");
   const officialExecutionSpecs = specs.filter((s) => s.endpoint !== "/get-models");
 
-  const docsPath = path.join(repoRoot, "docs", "ENDPOINTS.md");
   const uiPath = path.join(repoRoot, "payload", "extension", "out", "byok", "ui", "config-panel", "webview", "render", "index.js");
   const defaultCfgPath = path.join(repoRoot, "payload", "extension", "out", "byok", "config", "default-config.js");
   const officialDelegationPath = path.join(repoRoot, "payload", "extension", "out", "byok", "core", "official-delegation.js");
-
-  let docs = readText(docsPath);
-  docs = replaceAndAssertMatch(docs, /^(# ENDPOINTS：\s*\d+\s*\/\s*)\d+/m, `$1${llmCount}`, "docs header LLM count");
-  docs = replaceAndAssertMatch(
-    docs,
-    /\*\*\d+\s*个 LLM 数据面端点\*\*/,
-    `**${llmCount} 个 LLM 数据面端点**`,
-    "docs bold LLM endpoint count"
-  );
-  docs = replaceAndAssertMatch(
-    docs,
-    /^(##\s*)\d+(\s*个 LLM 数据面)/m,
-    `$1${llmCount}$2`,
-    "docs section LLM endpoint count"
-  );
-  docs = replaceBetweenMarkers(
-    docs,
-    "<!-- BEGIN GENERATED: LLM_ENDPOINTS -->",
-    "<!-- END GENERATED: LLM_ENDPOINTS -->",
-    generateDocsBlock(specs)
-  );
 
   let ui = readText(uiPath);
   ui = replaceAndAssertMatch(ui, /label:\s*"LLM 数据面（\d+）"/, `label: "LLM 数据面（${llmCount}）"`, "ui llm group label");
@@ -204,10 +168,8 @@ function main() {
   );
 
   if (args.check) {
-    const docsNow = readText(docsPath);
     const uiNow = readText(uiPath);
     const bad = [];
-    if (docsNow !== docs) bad.push(path.relative(repoRoot, docsPath));
     if (uiNow !== ui) bad.push(path.relative(repoRoot, uiPath));
     if (readText(defaultCfgPath) !== defaultCfg) bad.push(path.relative(repoRoot, defaultCfgPath));
     if (readText(officialDelegationPath) !== officialDelegation) bad.push(path.relative(repoRoot, officialDelegationPath));
@@ -221,10 +183,8 @@ function main() {
   }
 
   if (args.write) {
-    const docsBefore = readText(docsPath);
     const uiBefore = readText(uiPath);
     const defaultCfgBefore = readText(defaultCfgPath);
-    if (docsBefore !== docs) writeText(docsPath, docs);
     if (uiBefore !== ui) writeText(uiPath, ui);
     if (defaultCfgBefore !== defaultCfg) writeText(defaultCfgPath, defaultCfg);
     if (readText(officialDelegationPath) !== officialDelegation) writeText(officialDelegationPath, officialDelegation);

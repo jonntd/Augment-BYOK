@@ -6,7 +6,7 @@ const { REDACTED, redactConfigSecrets, mergeConfigPreservingSecrets } = require(
 function makeCfg({ officialToken, providerKey, headers } = {}) {
   return {
     version: 1,
-    official: { completionUrl: "https://ace.cctv.mba/", apiToken: officialToken || "" },
+    official: { completionUrl: "https://acemcp.heroman.wtf/relay/", apiToken: officialToken || "" },
     providers: [
       {
         id: "p1",
@@ -29,7 +29,18 @@ test("config-io: redactConfigSecrets redacts official/apiKey/auth headers", () =
   const cfg = makeCfg({
     officialToken: "ace_secret",
     providerKey: "sk-secret",
-    headers: { Authorization: "Bearer X", "x-api-key": "Y", other: "Z" }
+    headers: {
+      Authorization: "Bearer X",
+      "x-api-key": "Y",
+      "x-auth-token": "token",
+      "helicone-auth": "Bearer HELI",
+      "x-auth-mode": "basic",
+      "x-secret-sauce": "abc",
+      "client-secret": "secret",
+      password: "pw",
+      cookie: "sid=secret",
+      other: "Z"
+    }
   });
   const redacted = redactConfigSecrets(cfg);
 
@@ -37,6 +48,13 @@ test("config-io: redactConfigSecrets redacts official/apiKey/auth headers", () =
   assert.equal(redacted.providers[0].apiKey, REDACTED);
   assert.equal(redacted.providers[0].headers.Authorization, REDACTED);
   assert.equal(redacted.providers[0].headers["x-api-key"], REDACTED);
+  assert.equal(redacted.providers[0].headers["x-auth-token"], REDACTED);
+  assert.equal(redacted.providers[0].headers["helicone-auth"], REDACTED);
+  assert.equal(redacted.providers[0].headers["x-auth-mode"], "basic");
+  assert.equal(redacted.providers[0].headers["x-secret-sauce"], "abc");
+  assert.equal(redacted.providers[0].headers["client-secret"], REDACTED);
+  assert.equal(redacted.providers[0].headers.password, REDACTED);
+  assert.equal(redacted.providers[0].headers.cookie, REDACTED);
   assert.equal(redacted.providers[0].headers.other, "Z");
 });
 
@@ -49,7 +67,7 @@ test("config-io: mergeConfigPreservingSecrets keeps current secrets when incomin
   const incoming = makeCfg({
     officialToken: REDACTED,
     providerKey: REDACTED,
-    headers: { Authorization: REDACTED }
+    headers: { Authorization: "Bearer <redacted>" }
   });
 
   const merged = mergeConfigPreservingSecrets(current, incoming);
@@ -84,4 +102,28 @@ test("config-io: mergeConfigPreservingSecrets treats auth header keys case-insen
 
   const merged = mergeConfigPreservingSecrets(current, incoming);
   assert.equal(merged.providers[0].headers.authorization, "Bearer CUR");
+});
+
+
+test("config-io: mergeConfigPreservingSecrets keeps newly supported auth headers", () => {
+  const current = makeCfg({
+    headers: {
+      "x-auth-token": "CUR_TOKEN",
+      "client-secret": "CUR_SECRET",
+      cookie: "sid=current"
+    }
+  });
+  const incoming = makeCfg({
+    headers: {
+      "X-Auth-Token": REDACTED,
+      "client-secret": "",
+      other: "kept"
+    }
+  });
+
+  const merged = mergeConfigPreservingSecrets(current, incoming);
+  assert.equal(merged.providers[0].headers["X-Auth-Token"], "CUR_TOKEN");
+  assert.equal(merged.providers[0].headers["client-secret"], "CUR_SECRET");
+  assert.equal(merged.providers[0].headers.cookie, "sid=current");
+  assert.equal(merged.providers[0].headers.other, "kept");
 });

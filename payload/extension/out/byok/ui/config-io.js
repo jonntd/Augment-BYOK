@@ -1,19 +1,17 @@
 "use strict";
 
 const { warn } = require("../infra/log");
-const { normalizeString } = require("../infra/util");
+const { normalizeString, normalizeSecretValue, isAuthHeaderName } = require("../infra/util");
 const { normalizeConfig } = require("../config/config");
 
 const REDACTED = "<redacted>";
-const AUTH_HEADER_KEYS = ["authorization", "x-api-key", "api-key", "x-goog-api-key"];
 
 function asObject(v) {
   return v && typeof v === "object" && !Array.isArray(v) ? v : {};
 }
 
-function isRedactedLike(v) {
-  const s = normalizeString(v);
-  return s === REDACTED || s === "(set)" || s === "(redacted)";
+function shouldPreserveSecret(currentValue, incomingValue) {
+  return Boolean(normalizeSecretValue(currentValue)) && !normalizeSecretValue(incomingValue);
 }
 
 function redactHeaders(headers) {
@@ -22,7 +20,7 @@ function redactHeaders(headers) {
   for (const k of Object.keys(out)) {
     const key = String(k || "").trim().toLowerCase();
     if (!key) continue;
-    if (!AUTH_HEADER_KEYS.includes(key)) continue;
+    if (!isAuthHeaderName(key)) continue;
     const v = out[k];
     if (normalizeString(v)) out[k] = REDACTED;
   }
@@ -57,17 +55,24 @@ function findHeaderEntry(headers, keyLower) {
   return null;
 }
 
+function authHeaderNames(headers) {
+  return Object.keys(asObject(headers))
+    .map((k) => String(k || "").trim().toLowerCase())
+    .filter((k) => k && isAuthHeaderName(k));
+}
+
 function mergePreserveSecretsHeaders(currentHeaders, incomingHeaders) {
   const curr = asObject(currentHeaders);
   const inc = asObject(incomingHeaders);
   const out = { ...inc };
-  for (const key of AUTH_HEADER_KEYS) {
+  const keys = new Set([...authHeaderNames(curr), ...authHeaderNames(inc)]);
+
+  for (const key of keys) {
     const currEntry = findHeaderEntry(curr, key);
     const incEntry = findHeaderEntry(inc, key);
     const currVal = currEntry ? currEntry.value : undefined;
     const incVal = incEntry ? incEntry.value : undefined;
-    const shouldKeep = normalizeString(currVal) && (!normalizeString(incVal) || isRedactedLike(incVal));
-    if (!shouldKeep) continue;
+    if (!shouldPreserveSecret(currVal, incVal)) continue;
 
     const outKey = incEntry ? incEntry.key : currEntry ? currEntry.key : key;
     out[outKey] = currVal;
@@ -83,7 +88,7 @@ function mergeConfigPreservingSecrets(currentCfg, incomingCfg) {
 
   const currOfficial = asObject(current.official);
   out.official = asObject(out.official);
-  if (normalizeString(currOfficial.apiToken) && (!normalizeString(out.official.apiToken) || isRedactedLike(out.official.apiToken))) {
+  if (shouldPreserveSecret(currOfficial.apiToken, out.official.apiToken)) {
     out.official.apiToken = currOfficial.apiToken;
   }
 
@@ -97,7 +102,7 @@ function mergeConfigPreservingSecrets(currentCfg, incomingCfg) {
     const curr = currById.get(pid);
     if (!curr) continue;
 
-    if (normalizeString(curr.apiKey) && (!normalizeString(p.apiKey) || isRedactedLike(p.apiKey))) {
+    if (shouldPreserveSecret(curr.apiKey, p.apiKey)) {
       p.apiKey = curr.apiKey;
     }
     p.headers = mergePreserveSecretsHeaders(curr.headers, p.headers);

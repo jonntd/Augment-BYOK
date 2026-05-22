@@ -1,13 +1,12 @@
 "use strict";
 
 const { debug, warn } = require("../../infra/log");
-const { normalizeString, normalizeRawToken } = require("../../infra/util");
+const { normalizeString } = require("../../infra/util");
 const augmentChatShared = require("../../core/augment-chat/shared");
 const { normalizeOfficialBlobsDiff } = require("../../core/blob-utils");
-const { getOfficialConnection } = require("../../config/official");
 const { joinBaseUrl, safeFetch } = require("../../providers/http");
 const { readHttpErrorDetail } = require("../../providers/request-util");
-const { makeTextRequestNode, pickInjectionTargetArray, maybeInjectUserExtraTextParts } = require("./common");
+const { makeTextRequestNode, pickInjectionTargetArray, maybeInjectUserExtraTextParts, isOfficialContextDisabled, resolveOfficialContextConnection } = require("./common");
 
 const OFFICIAL_CODEBASE_RETRIEVAL_MAX_OUTPUT_LENGTH = 20000;
 const OFFICIAL_CODEBASE_RETRIEVAL_TIMEOUT_MS = 12000;
@@ -68,18 +67,14 @@ function buildCodebaseRetrievalInformationRequest(req) {
 
 async function maybeInjectOfficialCodebaseRetrieval({ req, timeoutMs, abortSignal, upstreamCompletionURL, upstreamApiToken }) {
   if (!req || typeof req !== "object") return false;
-  if (req.disable_retrieval === true) return false;
+  if (isOfficialContextDisabled(req)) return false;
 
   const info = buildCodebaseRetrievalInformationRequest(req);
   if (!normalizeString(info)) return false;
 
-  const off = getOfficialConnection();
-  const completionURL = normalizeString(upstreamCompletionURL) || off.completionURL;
-  const apiToken = normalizeRawToken(upstreamApiToken) || off.apiToken;
-  if (!completionURL || !apiToken) {
-    debug("officialRetrieval skipped: missing completionURL/apiToken");
-    return false;
-  }
+  const conn = resolveOfficialContextConnection({ feature: "codebase-retrieval", upstreamCompletionURL, upstreamApiToken });
+  if (!conn) return false;
+  const { completionURL, apiToken } = conn;
 
   const hardTimeout = Number.isFinite(Number(timeoutMs)) && Number(timeoutMs) > 0 ? Number(timeoutMs) : 120000;
   const t = Math.max(2000, Math.min(OFFICIAL_CODEBASE_RETRIEVAL_TIMEOUT_MS, Math.floor(hardTimeout * 0.5)));
@@ -121,4 +116,3 @@ async function maybeInjectOfficialCodebaseRetrieval({ req, timeoutMs, abortSigna
 }
 
 module.exports = { maybeInjectOfficialCodebaseRetrieval };
-

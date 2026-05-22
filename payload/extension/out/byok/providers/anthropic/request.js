@@ -5,7 +5,7 @@ const { normalizeString, requireString, normalizeRawToken } = require("../../inf
 const { truncateText } = require("../../infra/text");
 const { debug } = require("../../infra/log");
 const { withJsonContentType, anthropicAuthHeaders } = require("../headers");
-const { isInvalidRequestStatusForFallback } = require("../provider-util");
+const { isCompatibilityFallbackError } = require("../provider-util");
 const { fetchWithRetry, readHttpErrorDetail } = require("../request-util");
 const { repairAnthropicToolUsePairs } = require("../../core/tool-pairing");
 const { MAX_TOKENS_ALIAS_KEYS_PREFER_MAX_TOKENS, pickPositiveIntFromRecord } = require("../request-defaults-util");
@@ -248,7 +248,7 @@ async function postAnthropicWithFallbacks({ baseLabel, timeoutMs, abortSignal, a
     const r0 = await run(req0);
     if (r0.ok) return r0.resp;
 
-    const retryable0 = isInvalidRequestStatusForFallback(r0.resp.status);
+    const retryable0 = isCompatibilityFallbackError({ status: r0.resp.status, message: r0.text });
     const hasNext = i + 1 < list.length;
     const hasSystem = typeof req0.system === "string" && req0.system.trim();
     const alreadySystemBlocks = req0.systemAsBlocks === true;
@@ -275,7 +275,7 @@ async function postAnthropicWithFallbacks({ baseLabel, timeoutMs, abortSignal, a
       const r1 = await run(patched0, { labelSuffixExtra: `:${parts.join("+")}` });
       if (r1.ok) return r1.resp;
 
-      const retryable1 = isInvalidRequestStatusForFallback(r1.resp.status);
+      const retryable1 = isCompatibilityFallbackError({ status: r1.resp.status, message: r1.text });
       if (retryable1) {
         const patched1 = { ...patched0 };
         const parts2 = parts.slice();
@@ -300,7 +300,7 @@ async function postAnthropicWithFallbacks({ baseLabel, timeoutMs, abortSignal, a
           );
           const r2 = await run(patched1, { labelSuffixExtra: `:${parts2.join("+")}` });
           if (r2.ok) return r2.resp;
-          const retryable2 = isInvalidRequestStatusForFallback(r2.resp.status);
+          const retryable2 = isCompatibilityFallbackError({ status: r2.resp.status, message: r2.text });
           if (retryable2 && hasNext) continue;
           break;
         }

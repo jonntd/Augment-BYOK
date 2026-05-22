@@ -34,6 +34,18 @@
     return String(v ?? "").trim();
   };
 
+  ns.isPlaceholderSecretValue = function isPlaceholderSecretValue(v) {
+    const s = ns.normalizeStr(v);
+    if (!s) return true;
+    if (/^(Bearer|Basic)$/i.test(s) || s === "Token") return true;
+    const lower = s.toLowerCase();
+    return lower === "<redacted>" || lower === "(redacted)" || lower === "(set)";
+  };
+
+  ns.hasVisibleSecretValue = function hasVisibleSecretValue(v) {
+    return Boolean(ns.normalizeStr(v)) && !ns.isPlaceholderSecretValue(v);
+  };
+
   ns.uniq = function uniq(xs) {
     return Array.from(new Set((Array.isArray(xs) ? xs : []).map((x) => ns.normalizeStr(x)).filter(Boolean)));
   };

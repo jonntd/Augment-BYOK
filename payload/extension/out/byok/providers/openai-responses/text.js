@@ -3,9 +3,13 @@
 const { makeSseJsonIterator } = require("../sse-json");
 const { normalizeString } = require("../../infra/util");
 const { assertSseResponse } = require("../provider-util");
-const { extractErrorMessageFromJson } = require("../request-util");
 const { createOutputTextTracker } = require("./output-text-tracker");
-const { extractTextFromResponsesJson } = require("./json-util");
+const {
+  extractOpenAiResponsesJsonError,
+  extractTextPartsFromResponsesJson,
+  extractTextFromResponsesJson,
+  throwIfOpenAiResponsesJsonError
+} = require("./json-util");
 const { fetchOpenAiResponsesWithFallbacks } = require("./fetch");
 
 async function openAiResponsesCompleteText({ baseUrl, apiKey, model, instructions, input, timeoutMs, abortSignal, extraHeaders, requestDefaults }) {
@@ -25,6 +29,7 @@ async function openAiResponsesCompleteText({ baseUrl, apiKey, model, instruction
   });
 
   const json = await resp.json().catch(() => null);
+  throwIfOpenAiResponsesJsonError(json, "OpenAI(responses)");
   const output = Array.isArray(json?.output) ? json.output : [];
   const direct = extractTextFromResponsesJson(json);
   if (direct) return direct;
@@ -72,6 +77,7 @@ async function* openAiResponsesStreamTextDeltas({ baseUrl, apiKey, model, instru
   const contentType = normalizeString(resp?.headers?.get?.("content-type")).toLowerCase();
   if (contentType.includes("json")) {
     const json = await resp.json().catch(() => null);
+    throwIfOpenAiResponsesJsonError(json, "OpenAI(responses-stream)");
     const text = extractTextFromResponsesJson(json);
     if (text) {
       yield text;
@@ -86,6 +92,7 @@ async function* openAiResponsesStreamTextDeltas({ baseUrl, apiKey, model, instru
   const textTracker = createOutputTextTracker();
 
   for await (const { json, eventType } of sse.events) {
+    throwIfOpenAiResponsesJsonError(json?.response && typeof json.response === "object" ? json.response : json, "OpenAI(responses-stream)");
     if (eventType === "response.output_text.delta" && typeof json?.delta === "string" && json.delta) {
       const idx = json?.output_index ?? json?.outputIndex ?? json?.index;
       emitted += 1;
@@ -99,16 +106,17 @@ async function* openAiResponsesStreamTextDeltas({ baseUrl, apiKey, model, instru
         emitted += 1;
         yield rest;
       }
-    } else if (eventType === "response.completed" && json?.response && typeof json.response === "object") {
-      // 兼容：部分网关不发 done，只在 completed 里给 output_text。
-      const full = typeof json.response.output_text === "string" ? json.response.output_text : "";
-      const rest = textTracker.applyFinalText(0, full).rest;
-      if (rest) {
-        emitted += 1;
-        yield rest;
+    } else if ((eventType === "response.completed" || eventType === "response.incomplete") && json?.response && typeof json.response === "object") {
+      // 兼容：部分网关不发 done，只在 completed/incomplete 里给 output_text 或 output[]。
+      for (const part of extractTextPartsFromResponsesJson(json.response)) {
+        const rest = textTracker.applyFinalText(part.outputIndex, part.text).rest;
+        if (rest) {
+          emitted += 1;
+          yield rest;
+        }
       }
     } else if (eventType === "response.failed" || eventType === "response.error" || eventType === "error") {
-      const msg = normalizeString(extractErrorMessageFromJson(json)) || "upstream error event";
+      const msg = extractOpenAiResponsesJsonError(json) || "upstream error event";
       throw new Error(`OpenAI(responses-stream) upstream error event: ${msg}`.trim());
     }
   }

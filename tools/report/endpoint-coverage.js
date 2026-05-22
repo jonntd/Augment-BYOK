@@ -7,24 +7,45 @@ const path = require("path");
 const { getArgValue, getBooleanArg } = require("../lib/cli-args");
 const { readJson, writeText, ensureDir } = require("../lib/fs");
 const { LLM_ENDPOINT_SPECS } = require("./llm-endpoints-spec");
+const { sortedEndpointList } = require("../lib/endpoint-analysis");
+const { extractUiEndpointCatalogFromSource } = require("../lib/ui-endpoint-catalog");
 
 function formatList(xs) {
   const arr = Array.isArray(xs) ? xs : [];
   return arr.length ? arr.join(", ") : "-";
 }
 
+function diffSorted(left, right) {
+  const rightSet = new Set(Array.isArray(right) ? right : []);
+  return (Array.isArray(left) ? left : []).filter((x) => !rightSet.has(x)).sort();
+}
+
 function main() {
   const repoRoot = path.resolve(__dirname, "../..");
   const analysisPath = path.resolve(repoRoot, getArgValue(process.argv, "--analysis") || ".cache/reports/upstream-analysis.json");
   const outPath = path.resolve(repoRoot, getArgValue(process.argv, "--out") || "dist/endpoint-coverage.report.md");
+  const uiCatalogPath = path.resolve(
+    repoRoot,
+    getArgValue(process.argv, "--ui-catalog") || "payload/extension/out/byok/ui/config-panel/webview/render/index.js"
+  );
   const failFast = getBooleanArg(process.argv, "--fail-fast");
   const llmCount = LLM_ENDPOINT_SPECS.length;
 
   if (!fs.existsSync(analysisPath)) throw new Error(`missing analysis json: ${path.relative(repoRoot, analysisPath)}`);
   const analysis = readJson(analysisPath);
   const endpointDetails = analysis?.endpointDetails && typeof analysis.endpointDetails === "object" ? analysis.endpointDetails : {};
+  const upstreamEndpoints = sortedEndpointList(endpointDetails);
+  const uiEndpoints = fs.existsSync(uiCatalogPath)
+    ? extractUiEndpointCatalogFromSource(fs.readFileSync(uiCatalogPath, "utf8")).endpoints
+    : [];
 
   const errors = [];
+  if (!fs.existsSync(uiCatalogPath)) errors.push(`missing UI endpoint catalog: ${path.relative(repoRoot, uiCatalogPath)}`);
+  const missingUiEndpoints = diffSorted(upstreamEndpoints, uiEndpoints);
+  const extraUiEndpoints = diffSorted(uiEndpoints, upstreamEndpoints);
+  if (missingUiEndpoints.length) errors.push(`UI endpoint catalog missing upstream endpoint(s): ${formatList(missingUiEndpoints)}`);
+  if (extraUiEndpoints.length) errors.push(`UI endpoint catalog has stale endpoint(s): ${formatList(extraUiEndpoints)}`);
+
   const rows = [];
   for (const spec of LLM_ENDPOINT_SPECS) {
     const d = endpointDetails[spec.endpoint];
@@ -52,10 +73,13 @@ function main() {
 
   const upstream = analysis?.upstream || {};
   const header = [
-    `# LLM 端点覆盖矩阵（${llmCount}）`,
+    `# LLM 端点覆盖矩阵（${upstreamEndpoints.length} / ${llmCount}）`,
     "",
     `- upstream: ${String(upstream.publisher || "augment")}/${String(upstream.extension || "vscode-augment")}@${String(upstream.version || "unknown")}`,
     `- analysis: ${path.relative(repoRoot, analysisPath)}`,
+    `- upstream endpoints: ${upstreamEndpoints.length}`,
+    `- UI endpoint catalog: ${uiEndpoints.length} (${path.relative(repoRoot, uiCatalogPath)})`,
+    `- BYOK LLM endpoints: ${llmCount}`,
     "",
     `## 概览（${llmCount}×输入/输出形状）`,
     "",

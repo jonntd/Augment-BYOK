@@ -5,21 +5,42 @@ const path = require("path");
 
 const { replaceOnceRegex } = require("../lib/patch");
 const { loadPatchText, savePatchText } = require("./patch-target");
-const { listExtensionClientContextAssets } = require("./webview-assets");
+const { HISTORY_SUMMARY_NODE_PATCH_MARKER, listExtensionClientContextAssets } = require("./webview-assets");
 
-const MARKER = "__augment_byok_webview_history_summary_node_slim_v1";
+const MARKER = HISTORY_SUMMARY_NODE_PATCH_MARKER;
 const PATCH_LABEL = "extension-client-context HISTORY_SUMMARY node slimming";
 
 function resolveHistorySummaryFormatter(src) {
   const s = String(src || "");
-  const match = s.match(/function ([A-Za-z_$][0-9A-Za-z_$]*)\(e\)\{const t=e\.history_end\.map\(/);
-  if (!match) throw new Error("extension-client-context history summary formatter not found (upstream may have changed)");
-  return String(match[1] || "");
+  const formatterRe = /function ([A-Za-z_$][0-9A-Za-z_$]*)\(e\)\{const t=e\.history_end\.map\(/g;
+  const matches = Array.from(s.matchAll(formatterRe));
+  if (matches.length === 0) throw new Error("extension-client-context history summary formatter not found (upstream may have changed)");
+  if (matches.length > 1) {
+    throw new Error(
+      `extension-client-context history summary formatter matched multiple times (refuse to patch): matched=${matches.length}`
+    );
+  }
+  return String(matches[0][1] || "");
+}
+
+function assertSlimmedHistorySummaryAsset(src, filePath) {
+  const s = String(src || "");
+  const label = `${PATCH_LABEL}: ${filePath}`;
+  if (!s.includes(MARKER)) throw new Error(`${label}: marker missing after patch`);
+  if (!/type:[A-Za-z_$][0-9A-Za-z_$]*\.TEXT,text_node:\{content:/.test(s)) {
+    throw new Error(`${label}: HISTORY_SUMMARY node not rewritten to TEXT/text_node`);
+  }
+  if (/type:[^,}]*HISTORY_SUMMARY,history_summary_node:/.test(s)) {
+    throw new Error(`${label}: still carries upstream HISTORY_SUMMARY payload`);
+  }
 }
 
 function patchExtensionClientContextAsset(filePath) {
   const { original, alreadyPatched } = loadPatchText(filePath, { marker: MARKER });
-  if (alreadyPatched) return { changed: false, reason: "already_patched" };
+  if (alreadyPatched) {
+    assertSlimmedHistorySummaryAsset(original, filePath);
+    return { changed: false, reason: "already_patched" };
+  }
 
   // 上游 useHistorySummaryNew 会把 {history_end: tail exchanges(with nodes)} 存进 request_nodes 的 HISTORY_SUMMARY 节点。
   // 该节点体积巨大，后续“Editable History / 编辑历史对话”等路径可能对 request_nodes 做 JSON.stringify/clone，导致内存爆炸→VSIX 崩溃。
@@ -43,7 +64,8 @@ function patchExtensionClientContextAsset(filePath) {
     PATCH_LABEL
   );
 
-  savePatchText(filePath, out, { marker: MARKER });
+  const saved = savePatchText(filePath, out, { marker: MARKER });
+  assertSlimmedHistorySummaryAsset(saved, filePath);
   return { changed: true, reason: "patched" };
 }
 

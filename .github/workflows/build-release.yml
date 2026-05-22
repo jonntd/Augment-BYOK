@@ -26,10 +26,10 @@ jobs:
         with:
           python-version: "3.x"
 
-      - name: Check generated LLM endpoints (docs/UI)
+      - name: Check generated LLM endpoints
         run: node tools/gen/sync-llm-endpoints.js --check
 
-      - name: Check generated provider types (docs/UI)
+      - name: Check generated provider types
         run: node tools/gen/sync-provider-types.js --check
 
       - name: Provider type dispatch check

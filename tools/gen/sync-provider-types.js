@@ -78,10 +78,6 @@ function validateProviderTypes(types) {
   return list;
 }
 
-function generateDocsProviderTypesInline(types) {
-  return types.map((t) => `\`${t}\``).join(" | ");
-}
-
 function generateJsStringArrayLines(types, indent) {
   return types
     .map((t, idx) => {
@@ -97,17 +93,7 @@ function main() {
 
   const types = validateProviderTypes(KNOWN_PROVIDER_TYPES);
 
-  const docsPath = path.join(repoRoot, "docs", "CONFIG.md");
   const utilPath = path.join(repoRoot, "payload", "extension", "out", "byok", "ui", "config-panel", "webview", "util.js");
-
-  let docs = readText(docsPath);
-  const docsIndent = indentOfMarkerLine(docs, "<!-- BEGIN GENERATED: PROVIDER_TYPES -->");
-  docs = replaceBetweenMarkers(
-    docs,
-    "<!-- BEGIN GENERATED: PROVIDER_TYPES -->",
-    "<!-- END GENERATED: PROVIDER_TYPES -->",
-    docsIndent + generateDocsProviderTypesInline(types)
-  );
 
   let util = readText(utilPath);
   const utilIndent = indentOfMarkerLine(util, "/* BEGIN GENERATED: KNOWN_PROVIDER_TYPES */");
@@ -119,10 +105,8 @@ function main() {
   );
 
   if (args.check) {
-    const docsNow = readText(docsPath);
     const utilNow = readText(utilPath);
     const bad = [];
-    if (docsNow !== docs) bad.push(path.relative(repoRoot, docsPath));
     if (utilNow !== util) bad.push(path.relative(repoRoot, utilPath));
     if (bad.length) {
       console.error(`[sync-provider-types] OUTDATED (run: node tools/gen/sync-provider-types.js --write)`);
@@ -134,9 +118,7 @@ function main() {
   }
 
   if (args.write) {
-    const docsBefore = readText(docsPath);
     const utilBefore = readText(utilPath);
-    if (docsBefore !== docs) writeText(docsPath, docs);
     if (utilBefore !== util) writeText(utilPath, util);
     ok("wrote updated files");
     return;

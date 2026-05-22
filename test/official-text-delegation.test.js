@@ -8,25 +8,9 @@ function loadFresh(modulePath) {
 
 const { maybeBuildDelegatedTextPrompt } = require("../payload/extension/out/byok/runtime/upstream/official-text-delegation");
 
-test("official-text-delegation: builds from endpoint fields for completion", async () => {
-  const res = await maybeBuildDelegatedTextPrompt({
-    endpoint: "/completion",
-    body: { prompt: "hello completion", suffix: "SUFFIX" }
-  });
-
-  assert.equal(res.ok, true);
-  assert.equal(res.source, "byok.endpointFields.completion");
-  assert.equal(typeof res.system, "string");
-  assert.ok(res.system.length > 0);
-  assert.equal(Array.isArray(res.messages), true);
-  assert.equal(res.messages.length, 1);
-  assert.equal(res.messages[0].role, "user");
-  assert.ok(res.messages[0].content.includes("hello completion"));
-});
-
 test("official-text-delegation: builds from messages[] and keeps system as system text", async () => {
   const res = await maybeBuildDelegatedTextPrompt({
-    endpoint: "/instruction-stream",
+    endpoint: "/prompt-enhancer",
     body: {
       messages: [
         { role: "system", content: "SYSTEM_RULES" },
@@ -39,6 +23,52 @@ test("official-text-delegation: builds from messages[] and keeps system as syste
   assert.equal(res.source, "upstream.callApiBody.messages");
   assert.equal(res.system, "SYSTEM_RULES");
   assert.deepEqual(res.messages, [{ role: "user", content: "DO_IT" }]);
+});
+
+test("official-text-delegation: builds from responses input[]", async () => {
+  const res = await maybeBuildDelegatedTextPrompt({
+    endpoint: "/completion",
+    body: {
+      instructions: "SYSTEM_RULES",
+      input: [{ type: "message", role: "user", content: [{ type: "input_text", text: "COMPLETE_ME" }] }]
+    }
+  });
+
+  assert.equal(res.ok, true);
+  assert.equal(res.source, "upstream.callApiBody.input");
+  assert.equal(res.system, "SYSTEM_RULES");
+  assert.deepEqual(res.messages, [{ role: "user", content: "COMPLETE_ME" }]);
+});
+
+test("official-text-delegation: finds nested upstream body messages", async () => {
+  const res = await maybeBuildDelegatedTextPrompt({
+    endpoint: "/generate-commit-message-stream",
+    body: {
+      wrapper: {
+        request: {
+          messages: [{ role: "user", content: "SUMMARIZE_DIFF" }]
+        }
+      }
+    }
+  });
+
+  assert.equal(res.ok, true);
+  assert.equal(res.source, "upstream.callApiBody.messages");
+  assert.deepEqual(res.messages, [{ role: "user", content: "SUMMARIZE_DIFF" }]);
+});
+
+test("official-text-delegation: endpoint field-only bodies fail fast", async () => {
+  for (const [endpoint, body] of [
+    ["/completion", { prompt: "hello completion", suffix: "SUFFIX" }],
+    ["/chat-input-completion", { prompt: "hello input" }],
+    ["/prompt-enhancer", { message: "improve me" }],
+    ["/generate-commit-message-stream", { diff: "diff --git a/a b/a" }],
+    ["/next-edit-stream", { prefix: "const a = ", selected_text: "1", suffix: ";" }]
+  ]) {
+    const res = await maybeBuildDelegatedTextPrompt({ endpoint, body });
+    assert.equal(res.ok, false, endpoint);
+    assert.equal(res.reason, "invalid_request_body", endpoint);
+  }
 });
 
 test("official-text-delegation: chat endpoint is rejected (chat delegation handled elsewhere)", async () => {
@@ -84,11 +114,11 @@ test("official-text-delegation: audit logs emit without debug mode", async () =>
     const fresh = loadFresh("../payload/extension/out/byok/runtime/upstream/official-text-delegation");
     await fresh.maybeBuildDelegatedTextPrompt({
       endpoint: "/completion",
-      body: { prompt: "hello completion" }
+      body: { messages: [{ role: "user", content: "hello completion" }] }
     });
     await fresh.maybeBuildDelegatedTextPrompt({
       endpoint: "/completion",
-      body: { not_prompt: true }
+      body: { prompt: "field-only prompt" }
     });
   } finally {
     console.log = origLog;
@@ -98,6 +128,6 @@ test("official-text-delegation: audit logs emit without debug mode", async () =>
     loadFresh("../payload/extension/out/byok/runtime/upstream/official-text-delegation");
   }
 
-  assert.equal(lines.some((line) => line.includes("official text assembler delegated: ep=/completion source=")), true);
+  assert.equal(lines.some((line) => line.includes("official text assembler delegated: ep=/completion source=upstream.callApiBody.messages")), true);
   assert.equal(lines.some((line) => line.includes("official text assembler delegated miss: ep=/completion reason=invalid_request_body")), true);
 });

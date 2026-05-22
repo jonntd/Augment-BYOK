@@ -2,7 +2,7 @@
 
 const { debug } = require("../../infra/log");
 const { nowMs } = require("../../infra/trace");
-const { normalizeString, randomId } = require("../../infra/util");
+const { normalizeString, normalizeRawToken, randomId } = require("../../infra/util");
 const { fetchProviderModels } = require("../../providers/models");
 const { STOP_REASON_TOOL_USE_REQUESTED } = require("../augment-protocol");
 const { summarizeToolDefs } = require("./tool-defs");
@@ -47,7 +47,7 @@ async function selfTestProvider({ cfg: _cfg, provider, timeoutMs, abortSignal, l
 
   try {
     const baseUrl = normalizeString(provider?.baseUrl);
-    const apiKey = normalizeString(provider?.apiKey);
+    const apiKey = normalizeRawToken(provider?.apiKey);
     const headers = provider?.headers && typeof provider.headers === "object" && !Array.isArray(provider.headers) ? provider.headers : {};
     const authOk = Boolean(apiKey) || hasAuthHeader(headers);
     if (!type || !baseUrl || !authOk) {

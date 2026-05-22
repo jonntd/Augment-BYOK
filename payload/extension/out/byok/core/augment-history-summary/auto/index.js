@@ -121,7 +121,11 @@ function computeTriggerDecision({ hs, triggerModel, totalWithExtraBytes, convId 
 function buildFallbackSummaryText({ droppedHead, tail } = {}) {
   const dropped = Array.isArray(droppedHead) ? droppedHead.length : 0;
   const kept = Array.isArray(tail) ? tail.length : 0;
-  return `Context was compacted without an LLM summary (dropped_exchanges=${dropped} kept_exchanges=${kept}). Use the abridged and full tail history below.`;
+  return [
+    `Context was compacted without an LLM summary (dropped_exchanges=${dropped} kept_exchanges=${kept}).`,
+    "Use the abridged middle and full tail history below.",
+    "Prefer the latest full tail exchanges when they conflict with older abridged or summarized context."
+  ].join(" ");
 }
 
 async function resolveSummaryText({

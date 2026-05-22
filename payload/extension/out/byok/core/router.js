@@ -2,6 +2,7 @@
 
 const { normalizeEndpoint, normalizeString, parseByokModelId } = require("../infra/util");
 const { defaultConfig } = require("../config/default-config");
+const { isSelectableByokProvider, normalizeProviderModelId } = require("./protocol");
 
 const DEFAULT_ROUTING_RULES = (() => {
   try {
@@ -51,12 +52,27 @@ function pickProvider(cfg, providerId) {
   return p || null;
 }
 
+function pickProviderDefaultModel(provider) {
+  const p = provider && typeof provider === "object" ? provider : null;
+  if (!p) return "";
+  const pid = normalizeString(p.id);
+  return normalizeProviderModelId(pid, p.defaultModel) || normalizeProviderModelId(pid, p.models?.[0]);
+}
+
+function pickDefaultProvider(cfg) {
+  const list = Array.isArray(cfg?.providers) ? cfg.providers : [];
+  return list.find((p) => isSelectableByokProvider(p) && pickProviderDefaultModel(p)) || list.find((p) => isSelectableByokProvider(p)) || list[0] || null;
+}
+
 function decideRoute({ cfg, endpoint, body, runtimeEnabled }) {
   const ep = normalizeEndpoint(endpoint);
   if (!ep) return { mode: "official", endpoint: ep, reason: "empty_endpoint" };
   if (!runtimeEnabled) return { mode: "official", endpoint: ep, reason: "rollback_disabled" };
 
   const rule = getRule(cfg, ep);
+  const mode = normalizeString(rule?.mode) || "official";
+  if (mode === "disabled") return { mode, endpoint: ep, reason: "rule" };
+
   const requestedModel = pickRequestedModel(body);
   let parsed = null;
   try {
@@ -64,12 +80,18 @@ function decideRoute({ cfg, endpoint, body, runtimeEnabled }) {
   } catch {
     parsed = null;
   }
-  const mode = normalizeString(rule?.mode) || "official";
-  if (mode === "disabled") return { mode, endpoint: ep, reason: "rule" };
   if (mode === "official" && !parsed) return { mode, endpoint: ep, reason: "rule" };
   if (mode !== "byok" && !parsed) return { mode: "official", endpoint: ep, reason: "unknown_mode" };
+  if (ep === "/get-models") {
+    return {
+      mode: "byok",
+      endpoint: ep,
+      reason: parsed && mode !== "byok" ? "model_override" : "byok",
+      requestedModel
+    };
+  }
   const providerId = normalizeString(parsed?.providerId) || normalizeString(rule?.providerId) || "";
-  const provider = pickProvider(cfg, providerId);
+  const provider = providerId ? pickProvider(cfg, providerId) : pickDefaultProvider(cfg);
   if (!provider) {
     return {
       mode: "official",
@@ -79,8 +101,26 @@ function decideRoute({ cfg, endpoint, body, runtimeEnabled }) {
       requestedModel
     };
   }
+  if (!isSelectableByokProvider(provider)) {
+    return {
+      mode: "official",
+      endpoint: ep,
+      reason: "provider_unavailable",
+      providerId: normalizeString(provider.id),
+      requestedModel
+    };
+  }
   const parsedModel = parsed && normalizeString(parsed.providerId) === normalizeString(provider?.id) ? parsed.modelId : "";
-  const model = normalizeString(parsedModel) || normalizeString(rule?.model) || normalizeString(provider?.defaultModel) || "";
+  const model = normalizeString(parsedModel) || normalizeProviderModelId(normalizeString(provider.id), rule?.model) || pickProviderDefaultModel(provider);
+  if (!model) {
+    return {
+      mode: "official",
+      endpoint: ep,
+      reason: "model_missing",
+      providerId: normalizeString(provider.id),
+      requestedModel
+    };
+  }
   return {
     mode: "byok",
     endpoint: ep,

@@ -3,13 +3,16 @@
 const { makeSseJsonIterator } = require("../sse-json");
 const { normalizeString } = require("../../infra/util");
 const { normalizeUsageInt, applyParallelToolCallsPolicy, makeToolMetaGetter, assertSseResponse } = require("../provider-util");
-const { extractErrorMessageFromJson } = require("../request-util");
 const { buildToolUseChunks, buildTokenUsageChunk, buildFinalChatChunk } = require("../chat-chunks-util");
 const { createOutputTextTracker } = require("./output-text-tracker");
 const {
+  extractOpenAiResponsesJsonError,
   extractToolCallsFromResponseOutput,
   extractReasoningSummaryFromResponseOutput,
   extractStopReasonFromResponsesObject,
+  extractTextPartsFromResponsesJson,
+  extractTextFromResponsesJson,
+  throwIfOpenAiResponsesJsonError,
   emitOpenAiResponsesJsonAsAugmentChunks
 } = require("./json-util");
 const { fetchOpenAiResponsesWithFallbacks } = require("./fetch");
@@ -82,6 +85,7 @@ async function* openAiResponsesChatStreamChunks({
   const sse = makeSseJsonIterator(resp, { doneData: "[DONE]" });
   for await (const { json, eventType } of sse.events) {
     if (!eventType) continue;
+    throwIfOpenAiResponsesJsonError(json?.response && typeof json.response === "object" ? json.response : json, "OpenAI(responses-chat-stream)");
 
     if (eventType === "response.output_item.added") {
       const item = json?.item && typeof json.item === "object" ? json.item : null;
@@ -212,12 +216,13 @@ async function* openAiResponsesChatStreamChunks({
         stopReasonSeen = true;
         stopReason = stop.stopReason;
       }
-      const full = typeof json.response.output_text === "string" ? json.response.output_text : "";
-      const rest = textTracker.applyFinalText(0, full).rest;
-      if (rest) {
-        nodeId += 1;
-        emittedChunks += 1;
-        yield makeBackChatChunk({ text: rest, nodes: [rawResponseNode({ id: nodeId, content: rest })] });
+      for (const part of extractTextPartsFromResponsesJson(json.response)) {
+        const rest = textTracker.applyFinalText(part.outputIndex, part.text).rest;
+        if (rest) {
+          nodeId += 1;
+          emittedChunks += 1;
+          yield makeBackChatChunk({ text: rest, nodes: [rawResponseNode({ id: nodeId, content: rest })] });
+        }
       }
       const usage = json.response?.usage && typeof json.response.usage === "object" ? json.response.usage : null;
       if (usage) {
@@ -232,13 +237,12 @@ async function* openAiResponsesChatStreamChunks({
     }
 
     if (eventType === "response.failed") {
-      const r = json?.response && typeof json.response === "object" ? json.response : null;
-      const msg = normalizeString(extractErrorMessageFromJson(r || json)) || "upstream failed";
+      const msg = extractOpenAiResponsesJsonError(json) || "upstream failed";
       throw new Error(`OpenAI(responses-chat-stream) upstream failed: ${msg}`.trim());
     }
 
     if (eventType === "response.error" || eventType === "error") {
-      const msg = normalizeString(extractErrorMessageFromJson(json)) || "upstream error event";
+      const msg = extractOpenAiResponsesJsonError(json) || "upstream error event";
       throw new Error(`OpenAI(responses-chat-stream) upstream error event: ${msg}`.trim());
     }
   }
@@ -259,7 +263,7 @@ async function* openAiResponsesChatStreamChunks({
       if (outputTokens != null) usageOutputTokens = outputTokens;
       if (cached != null) usageCacheReadInputTokens = cached;
     }
-    finalText = typeof finalResponse.output_text === "string" ? finalResponse.output_text : "";
+    finalText = extractTextFromResponsesJson(finalResponse);
   } else {
     toolCalls = Array.from(toolCallsByOutputIndex.entries())
       .sort((a, b) => a[0] - b[0])
@@ -270,11 +274,13 @@ async function* openAiResponsesChatStreamChunks({
   if (reasoningSummary) thinkingBuf = reasoningSummary;
 
   if (finalText) {
-    const rest = textTracker.applyFinalText(0, finalText).rest;
-    if (rest) {
-      nodeId += 1;
-      emittedChunks += 1;
-      yield makeBackChatChunk({ text: rest, nodes: [rawResponseNode({ id: nodeId, content: rest })] });
+    for (const part of extractTextPartsFromResponsesJson(finalResponse)) {
+      const rest = textTracker.applyFinalText(part.outputIndex, part.text).rest;
+      if (rest) {
+        nodeId += 1;
+        emittedChunks += 1;
+        yield makeBackChatChunk({ text: rest, nodes: [rawResponseNode({ id: nodeId, content: rest })] });
+      }
     }
   }
 

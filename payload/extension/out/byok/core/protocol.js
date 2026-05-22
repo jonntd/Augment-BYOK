@@ -1,8 +1,9 @@
 "use strict";
 
-const { normalizeString, randomId } = require("../infra/util");
+const { normalizeString, normalizeRawToken, randomId, hasAuthHeader, parseByokModelId } = require("../infra/util");
 const { applyChatResponseMeta } = require("./chat-response-meta");
 const { ensureModelRegistryFeatureFlags } = require("./model-registry");
+const { KNOWN_PROVIDER_TYPES } = require("./provider-types");
 
 function coerceText(text) {
   return typeof text === "string" ? text : String(text ?? "");
@@ -60,13 +61,34 @@ function makeBackNextEditGenerationChunk({ path, blobName, charStart, charEnd, e
   };
 }
 
-function makeBackNextEditLocationResult(candidate_locations) {
-  return {
-    candidate_locations: Array.isArray(candidate_locations) ? candidate_locations : [],
-    unknown_blob_names: [],
-    checkpoint_not_found: false,
-    critical_errors: []
-  };
+function hasUsableProviderAuth(provider) {
+  const p = provider && typeof provider === "object" ? provider : null;
+  if (!p) return false;
+  const apiKey = normalizeRawToken(p.apiKey);
+  if (apiKey) return true;
+  return hasAuthHeader(p.headers);
+}
+
+function isSelectableByokProvider(provider) {
+  const p = provider && typeof provider === "object" ? provider : null;
+  if (!p) return false;
+  const id = normalizeString(p.id);
+  const type = normalizeString(p.type);
+  const baseUrl = normalizeString(p.baseUrl);
+  if (!id || !baseUrl) return false;
+  if (!KNOWN_PROVIDER_TYPES.includes(type)) return false;
+  return hasUsableProviderAuth(p);
+}
+
+function normalizeProviderModelId(providerId, model) {
+  const pid = normalizeString(providerId);
+  const raw = normalizeString(model);
+  if (!pid || !raw) return "";
+
+  if (!raw.startsWith("byok:")) return raw;
+  const parsed = parseByokModelId(raw);
+  if (!parsed || normalizeString(parsed.providerId) !== pid) return "";
+  return normalizeString(parsed.modelId);
 }
 
 function buildByokModelsFromConfig(cfg) {
@@ -79,21 +101,25 @@ function buildByokModelsFromConfig(cfg) {
     out.push(s);
   };
   const providers = Array.isArray(cfg?.providers) ? cfg.providers : [];
+  const selectableProviders = providers.filter((p) => isSelectableByokProvider(p));
+  const selectableProviderIds = new Set(selectableProviders.map((p) => normalizeString(p?.id)).filter(Boolean));
 
-  const activeProvider = providers[0] || null;
+  const activeProvider = selectableProviders[0] || null;
   const activeProviderId = normalizeString(activeProvider?.id);
-  const activeProviderDefaultModel = normalizeString(activeProvider?.defaultModel) || normalizeString(activeProvider?.models?.[0]);
+  const activeProviderDefaultModel =
+    normalizeProviderModelId(activeProviderId, activeProvider?.defaultModel) ||
+    normalizeProviderModelId(activeProviderId, activeProvider?.models?.[0]);
   if (activeProviderId && activeProviderDefaultModel) add(`byok:${activeProviderId}:${activeProviderDefaultModel}`);
 
-  for (const p of providers) {
+  for (const p of selectableProviders) {
     const pid = normalizeString(p?.id);
     if (!pid) continue;
     const models = Array.isArray(p?.models) ? p.models : [];
     for (const m of models) {
-      const mid = normalizeString(m);
+      const mid = normalizeProviderModelId(pid, m);
       if (mid) add(`byok:${pid}:${mid}`);
     }
-    const dm = normalizeString(p?.defaultModel);
+    const dm = normalizeProviderModelId(pid, p?.defaultModel);
     if (dm) add(`byok:${pid}:${dm}`);
   }
 
@@ -102,17 +128,17 @@ function buildByokModelsFromConfig(cfg) {
     for (const r of Object.values(rules)) {
       if (!r || typeof r !== "object") continue;
       const pid = normalizeString(r.providerId);
-      const mid = normalizeString(r.model);
-      if (pid && mid) add(`byok:${pid}:${mid}`);
+      const mid = normalizeProviderModelId(pid, r.model);
+      if (pid && mid && selectableProviderIds.has(pid)) add(`byok:${pid}:${mid}`);
     }
   }
   return out;
 }
 
 function makeBackGetModelsResult({ defaultModel, models }) {
-  const dm = normalizeString(defaultModel) || (Array.isArray(models) && models.length ? models[0].name : "unknown");
   const ms = Array.isArray(models) ? models : [];
   const byokIds = ms.map((m) => normalizeString(m?.name)).filter(Boolean);
+  const dm = normalizeString(defaultModel) || byokIds[0] || "";
   return {
     default_model: dm,
     models: ms,
@@ -129,7 +155,9 @@ module.exports = {
   makeBackChatResult,
   makeBackCompletionResult,
   makeBackNextEditGenerationChunk,
-  makeBackNextEditLocationResult,
+  hasUsableProviderAuth,
+  isSelectableByokProvider,
+  normalizeProviderModelId,
   buildByokModelsFromConfig,
   makeBackGetModelsResult,
   makeModelInfo

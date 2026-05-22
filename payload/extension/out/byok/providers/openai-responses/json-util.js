@@ -51,6 +51,21 @@ function pickResponseObject(json) {
   return resp || obj;
 }
 
+function extractOpenAiResponsesJsonError(json) {
+  const obj = pickResponseObject(json);
+  if (!obj || typeof obj !== "object") return "";
+  const status = normalizeString(obj.status).toLowerCase();
+  const hasErrorShape = Boolean(obj.error) || normalizeString(obj.type).toLowerCase() === "error";
+  if (!hasErrorShape && status !== "failed" && status !== "error") return "";
+  return normalizeString(extractErrorMessageFromJson(obj)) || status || "upstream error";
+}
+
+function throwIfOpenAiResponsesJsonError(json, label) {
+  const msg = extractOpenAiResponsesJsonError(json);
+  if (!msg) return;
+  throw new Error(`${normalizeString(label) || "OpenAI(responses)"} upstream error: ${msg}`.trim());
+}
+
 function mapResponsesIncompleteReasonToAugment(reason) {
   const r = normalizeString(reason).toLowerCase();
   if (r === "max_output_tokens" || r === "max_tokens" || r === "length") return STOP_REASON_MAX_TOKENS;
@@ -72,43 +87,46 @@ function extractStopReasonFromResponsesObject(obj) {
   return { stopReasonSeen: true, stopReason: mapResponsesIncompleteReasonToAugment(reason) };
 }
 
-function extractTextFromResponsesJson(json) {
+function extractTextPartsFromResponsesJson(json) {
   const obj = pickResponseObject(json);
-  const direct = normalizeString(obj?.output_text ?? obj?.outputText ?? obj?.text);
-  if (direct) return direct;
-
   const output = Array.isArray(obj?.output) ? obj.output : [];
-  const parts = [];
-  for (const it of output) {
+  const out = [];
+  for (let i = 0; i < output.length; i++) {
+    const it = output[i];
     if (!it || typeof it !== "object") continue;
+    const parts = [];
     if (it.type === "message" && it.role === "assistant") {
       const content = it.content;
       if (typeof content === "string" && content.trim()) {
         parts.push(content);
-        continue;
+      } else {
+        const blocks = Array.isArray(content) ? content : [];
+        for (const b of blocks) {
+          if (!b || typeof b !== "object") continue;
+          if ((b.type === "output_text" || b.type === "text") && typeof b.text === "string" && b.text) parts.push(b.text);
+        }
       }
-      const blocks = Array.isArray(content) ? content : [];
-      for (const b of blocks) {
-        if (!b || typeof b !== "object") continue;
-        if ((b.type === "output_text" || b.type === "text") && typeof b.text === "string" && b.text) parts.push(b.text);
-      }
-      continue;
-    }
-    if ((it.type === "output_text" || it.type === "text") && typeof it.text === "string" && it.text) {
+    } else if ((it.type === "output_text" || it.type === "text") && typeof it.text === "string" && it.text) {
       parts.push(it.text);
-      continue;
     }
+    const text = parts.join("");
+    if (normalizeString(text)) out.push({ outputIndex: i, text });
   }
-  return parts.join("").trim();
+  if (out.length) return out;
+
+  const direct = normalizeString(obj?.output_text ?? obj?.outputText ?? obj?.text);
+  if (direct) return [{ text: direct }];
+  return out;
+}
+
+function extractTextFromResponsesJson(json) {
+  return extractTextPartsFromResponsesJson(json).map((p) => p.text).join("").trim();
 }
 
 async function* emitOpenAiResponsesJsonAsAugmentChunks(json, { toolMetaByName, supportToolUseStart } = {}) {
   const obj = pickResponseObject(json);
   if (!obj || typeof obj !== "object") throw new Error("OpenAI(responses-chat-stream) 响应不是有效 JSON");
-  if (obj.error) {
-    const msg = normalizeString(extractErrorMessageFromJson(obj)) || "upstream error";
-    throw new Error(`OpenAI(responses-chat-stream) upstream error: ${msg}`.trim());
-  }
+  throwIfOpenAiResponsesJsonError(obj, "OpenAI(responses-chat-stream)");
 
   const getToolMeta = makeToolMetaGetter(toolMetaByName);
   let nodeId = 0;
@@ -159,9 +177,12 @@ async function* emitOpenAiResponsesJsonAsAugmentChunks(json, { toolMetaByName, s
 }
 
 module.exports = {
+  extractOpenAiResponsesJsonError,
   extractToolCallsFromResponseOutput,
   extractReasoningSummaryFromResponseOutput,
   extractStopReasonFromResponsesObject,
+  extractTextPartsFromResponsesJson,
   extractTextFromResponsesJson,
+  throwIfOpenAiResponsesJsonError,
   emitOpenAiResponsesJsonAsAugmentChunks
 };

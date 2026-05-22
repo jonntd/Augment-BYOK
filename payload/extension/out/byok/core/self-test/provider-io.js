@@ -1,6 +1,6 @@
 "use strict";
 
-const { normalizeString } = require("../../infra/util");
+const { normalizeString, normalizeRawToken } = require("../../infra/util");
 const { buildToolMetaByName } = require("../augment-chat");
 const { completeTextByProviderType, streamTextDeltasByProviderType } = require("../provider-text");
 const { streamAugmentChatChunksByProviderType, convertToolDefinitionsByProviderType } = require("../provider-augment-chat");
@@ -69,7 +69,7 @@ function pickProviderModel(provider, fetchedModels) {
 async function completeTextByProvider({ provider, model, system, messages, timeoutMs, abortSignal }) {
   const type = normalizeString(provider?.type);
   const baseUrl = normalizeString(provider?.baseUrl);
-  const apiKey = normalizeString(provider?.apiKey);
+  const apiKey = normalizeRawToken(provider?.apiKey);
   const extraHeaders = provider?.headers && typeof provider.headers === "object" && !Array.isArray(provider.headers) ? provider.headers : {};
   const requestDefaults = provider?.requestDefaults && typeof provider.requestDefaults === "object" && !Array.isArray(provider.requestDefaults) ? provider.requestDefaults : {};
 
@@ -79,7 +79,7 @@ async function completeTextByProvider({ provider, model, system, messages, timeo
 async function streamTextByProvider({ provider, model, system, messages, timeoutMs, abortSignal }) {
   const type = normalizeString(provider?.type);
   const baseUrl = normalizeString(provider?.baseUrl);
-  const apiKey = normalizeString(provider?.apiKey);
+  const apiKey = normalizeRawToken(provider?.apiKey);
   const extraHeaders = provider?.headers && typeof provider.headers === "object" && !Array.isArray(provider.headers) ? provider.headers : {};
   const requestDefaults = provider?.requestDefaults && typeof provider.requestDefaults === "object" && !Array.isArray(provider.requestDefaults) ? provider.requestDefaults : {};
 
@@ -115,7 +115,7 @@ function validateConvertedToolsForProvider(providerType, convertedTools) {
 async function chatStreamByProvider({ provider, model, req, timeoutMs, abortSignal }) {
   const type = normalizeString(provider?.type);
   const baseUrl = normalizeString(provider?.baseUrl);
-  const apiKey = normalizeString(provider?.apiKey);
+  const apiKey = normalizeRawToken(provider?.apiKey);
   const extraHeaders = provider?.headers && typeof provider.headers === "object" && !Array.isArray(provider.headers) ? provider.headers : {};
   const requestDefaults = provider?.requestDefaults && typeof provider.requestDefaults === "object" && !Array.isArray(provider.requestDefaults) ? provider.requestDefaults : {};
   const toolMetaByName = buildToolMetaByName(req.tool_definitions);

@@ -8,6 +8,94 @@ const { assertFileExists, assertContains, assertHasCommand, assertModelRegistryF
 const { assertCallApiShimSignatureContracts } = require("./check-callapi-shim");
 const { assertProtocolEnumsAligned } = require("./check-protocol-enums");
 const { assertAugmentProtocolShapes } = require("./check-augment-protocol-shapes");
+const { listExtensionClientContextAssets } = require("../../patch/webview-assets");
+const { LLM_ENDPOINT_SPECS } = require("../../report/llm-endpoints-spec");
+const { endpointDetailsFromSource, sortedEndpointList } = require("../../lib/endpoint-analysis");
+const { extractUiEndpointCatalogFromSource } = require("../../lib/ui-endpoint-catalog");
+
+function sorted(xs) {
+  return Array.from(new Set(Array.isArray(xs) ? xs : [])).sort();
+}
+
+function byokRouteEndpoints(rules) {
+  return sorted(
+    Object.entries(rules && typeof rules === "object" ? rules : {})
+      .filter(([, rule]) => rule && typeof rule === "object" && rule.mode === "byok")
+      .map(([endpoint]) => endpoint)
+  );
+}
+
+function listJsFilesRecursive(rootDir) {
+  const root = path.resolve(String(rootDir || ""));
+  const out = [];
+  const stack = [root];
+  while (stack.length) {
+    const dir = stack.pop();
+    for (const name of fs.readdirSync(dir).sort().reverse()) {
+      const p = path.join(dir, name);
+      const st = fs.statSync(p);
+      if (st.isDirectory()) stack.push(p);
+      else if (st.isFile() && name.endsWith(".js")) out.push(p);
+    }
+  }
+  return out.sort();
+}
+
+function hasStaleEndpointLiteral(src, endpoint) {
+  const s = String(src || "");
+  const ep = String(endpoint || "");
+  if (!ep) return false;
+  return [JSON.stringify(ep), `'${ep}'`, `\`${ep}\``].some((needle) => s.includes(needle));
+}
+
+function assertNoStaleByokEndpointStrings(byokDir) {
+  const staleEndpoints = ["/edit", "/generate-conversation-title", "/next_edit_loc", "/instruction-stream", "/smart-paste-stream"];
+  const hits = [];
+  for (const filePath of listJsFilesRecursive(byokDir)) {
+    const src = readText(filePath);
+    for (const ep of staleEndpoints) {
+      if (hasStaleEndpointLiteral(src, ep)) hits.push(`${path.relative(byokDir, filePath)}:${ep}`);
+    }
+  }
+  assert(hits.length === 0, `stale removed BYOK endpoint string(s) found:\n${hits.join("\n")}`);
+  ok(`stale BYOK endpoint strings absent (${staleEndpoints.length})`);
+}
+
+function assertEndpointCoverageContracts({ extJs, config, callApiShim, callApiStreamShim }) {
+  const endpointDetails = endpointDetailsFromSource(extJs);
+  const upstreamEndpoints = sortedEndpointList(endpointDetails);
+  const specCallApi = sorted(LLM_ENDPOINT_SPECS.filter((s) => s && s.kind === "callApi").map((s) => s.endpoint));
+  const specCallApiStream = sorted(LLM_ENDPOINT_SPECS.filter((s) => s && s.kind === "callApiStream").map((s) => s.endpoint));
+  const specEndpoints = sorted(LLM_ENDPOINT_SPECS.map((s) => s.endpoint));
+
+  assert(
+    JSON.stringify(sorted(callApiShim.SUPPORTED_CALL_API_ENDPOINTS)) === JSON.stringify(specCallApi),
+    "callApi shim supported endpoints drift from LLM_ENDPOINT_SPECS"
+  );
+  assert(
+    JSON.stringify(sorted(callApiStreamShim.SUPPORTED_CALL_API_STREAM_ENDPOINTS)) === JSON.stringify(specCallApiStream),
+    "callApiStream shim supported endpoints drift from LLM_ENDPOINT_SPECS"
+  );
+
+  for (const spec of LLM_ENDPOINT_SPECS) {
+    const d = endpointDetails[spec.endpoint];
+    assert(d, `LLM endpoint missing from upstream extension.js: ${spec.endpoint}`);
+    const callApi = Number(d.callApi || 0);
+    const callApiStream = Number(d.callApiStream || 0);
+    if (spec.kind === "callApi") {
+      assert(callApi > 0 && callApiStream === 0, `LLM endpoint kind mismatch: ${spec.endpoint} expected=callApi got(${callApi}/${callApiStream})`);
+    } else {
+      assert(callApi === 0 && callApiStream > 0, `LLM endpoint kind mismatch: ${spec.endpoint} expected=callApiStream got(${callApi}/${callApiStream})`);
+    }
+  }
+
+  const cfg = config.defaultConfig();
+  assert(
+    JSON.stringify(byokRouteEndpoints(cfg.routing?.rules)) === JSON.stringify(specEndpoints),
+    "defaultConfig BYOK endpoint routes drift from LLM_ENDPOINT_SPECS"
+  );
+  ok(`LLM endpoint coverage ok (${upstreamEndpoints.length}/${specEndpoints.length})`);
+}
 
 function main(argv = process.argv) {
   const args = parseArgs(argv);
@@ -48,9 +136,6 @@ function main(argv = process.argv) {
     "out/byok/runtime/upstream/official-chat-delegation.js",
     "out/byok/runtime/upstream/official-text-delegation.js",
     "out/byok/runtime/upstream/text-assembly/prompt-utils.js",
-    "out/byok/runtime/upstream/text-assembly/endpoint-fields.js",
-    "out/byok/runtime/upstream/text-assembly/endpoint-fields-basic.js",
-    "out/byok/runtime/upstream/text-assembly/endpoint-fields-next-edit-loc.js",
     "out/byok/runtime/workspace/file-chunks.js",
     "out/byok/config/config.js",
     "out/byok/config/default-config.js",
@@ -89,11 +174,11 @@ function main(argv = process.argv) {
     "out/byok/core/tool-pairing/openai-responses.js",
     "out/byok/core/tool-pairing/anthropic.js",
     "out/byok/core/next-edit/fields.js",
-    "out/byok/core/next-edit/loc-utils.js",
     "out/byok/core/next-edit/stream-utils.js",
     "out/byok/infra/constants.js",
     "out/byok/infra/util.js",
     "out/byok/infra/log.js",
+    "out/byok/infra/log-redact.js",
     "out/byok/providers/openai/index.js",
     "out/byok/providers/chat-chunks-util.js",
     "out/byok/providers/openai/chat-completions-util.js",
@@ -150,12 +235,29 @@ function main(argv = process.argv) {
   assert(!extJs.includes("case \"/autoAuth\"") && !extJs.includes("handleAutoAuth"), "autoAuth guard failed (post-check)");
   ok("extension.js markers ok");
 
+  const webviewAssets = listExtensionClientContextAssets(extensionDir, "contracts");
+  assert(webviewAssets.length > 0, "webview history summary asset missing");
+  for (const assetPath of webviewAssets) {
+    const webviewHistorySummary = readText(assetPath);
+    assertContains(webviewHistorySummary, "__augment_byok_webview_history_summary_node_slim_v1", "webview history summary node patched");
+    assert(
+      /return\{id:[^}]+type:[^}]*TEXT[^}]+text_node:\{content:/s.test(webviewHistorySummary),
+      `webview history summary node not rewritten to TEXT/text_node: ${assetPath}`
+    );
+    assert(
+      !/type:[^,}]*HISTORY_SUMMARY,history_summary_node:/.test(webviewHistorySummary),
+      `webview history summary node still carries upstream HISTORY_SUMMARY payload: ${assetPath}`
+    );
+  }
+  ok(`webview history summary patch markers ok (${webviewAssets.length})`);
+
   assertCallApiShimSignatureContracts(extJs);
 
   const byokDir = path.join(extensionDir, "out", "byok");
   const coreDir = path.join(byokDir, "core");
   const configDir = path.join(byokDir, "config");
   const infraDir = path.join(byokDir, "infra");
+  const uiRenderPath = path.join(byokDir, "ui", "config-panel", "webview", "render", "index.js");
   const modelRegistry = require(path.join(coreDir, "model-registry.js"));
   const protocol = require(path.join(coreDir, "protocol.js"));
   const augmentProtocol = require(path.join(coreDir, "augment-protocol.js"));
@@ -164,9 +266,19 @@ function main(argv = process.argv) {
   const config = require(path.join(configDir, "config.js"));
   const router = require(path.join(coreDir, "router.js"));
   const util = require(path.join(infraDir, "util.js"));
+  const callApiShim = require(path.join(byokDir, "runtime", "shim", "call-api", "index.js"));
+  const callApiStreamShim = require(path.join(byokDir, "runtime", "shim", "call-api-stream", "index.js"));
 
   assertProtocolEnumsAligned(extensionDir, augmentProtocol, augmentChatShared, augmentNodeFormat);
   assertAugmentProtocolShapes(augmentProtocol);
+  assertEndpointCoverageContracts({ extJs, config, callApiShim, callApiStreamShim });
+  assertNoStaleByokEndpointStrings(byokDir);
+  const uiEndpoints = extractUiEndpointCatalogFromSource(readText(uiRenderPath)).endpoints;
+  assert(
+    JSON.stringify(uiEndpoints) === JSON.stringify(sorted(Object.keys(endpointDetailsFromSource(extJs)))),
+    "webview endpoint catalog drift from upstream endpoint set"
+  );
+  ok(`webview endpoint catalog ok (${uiEndpoints.length})`);
 
   const sampleByokId = "byok:openai:gpt-4o-mini";
   const flags = modelRegistry.ensureModelRegistryFeatureFlags({}, { byokModelIds: [sampleByokId], defaultModel: sampleByokId });
@@ -181,6 +293,8 @@ function main(argv = process.argv) {
   ok("makeBackGetModelsResult contract ok");
 
   const cfg = config.defaultConfig();
+  const cfgProvider = Array.isArray(cfg.providers) ? cfg.providers.find((p) => p && p.id === "openai") : null;
+  if (cfgProvider) cfgProvider.apiKey = "sk-test-openai";
   const r = router.decideRoute({ cfg, endpoint: "/chat-stream", body: { model: sampleByokId }, runtimeEnabled: true });
   assert(r && r.mode === "byok", "router.decideRoute expected mode=byok");
   assert(r.provider && r.provider.id === "openai", "router.decideRoute expected provider=openai");
@@ -200,6 +314,6 @@ function main(argv = process.argv) {
   ok("ALL CONTRACTS OK");
 }
 
-module.exports = { main };
+module.exports = { main, hasStaleEndpointLiteral };
 
 if (require.main === module) main();

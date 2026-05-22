@@ -3,10 +3,41 @@
 const { assert, ok, escapeRegExp } = require("./util");
 const { findAsyncMethodParams } = require("./js-parse");
 
-// patch-callapi-shim.js injects a minifier-robust upstreamApiToken expression using arguments[...] indexes:
-// arguments[10] ?? ((arguments[1]||{}).apiToken)
-const INJECTED_UPSTREAM_API_TOKEN_COALESCE_RE =
-  /arguments\s*\[\s*10\s*\]\s*(?:\?\?|\|\|)\s*\(\s*\(\s*arguments\s*\[\s*1\s*\]\s*\|\|\s*\{\s*\}\s*\)\s*\.apiToken\s*\)/;
+function assertInjectedShimContext(methodWindow, label) {
+  const shimIdx = methodWindow.indexOf("const __byok_host=this;");
+  assert(shimIdx >= 0, `${label} contract: expected injected shim at method entry`);
+  assert(
+    /\bconst\s+__byok_host\s*=\s*this\s*;/.test(methodWindow),
+    `${label} contract: expected shim to capture upstream call host as __byok_host=this`
+  );
+  assert(
+    /upstreamCallHost\s*:\s*__byok_host/.test(methodWindow),
+    `${label} contract: expected shim to pass upstreamCallHost:__byok_host`
+  );
+  assert(
+    !/delete\s+__byok_body\.(?:third_party_override|thirdPartyOverride)/.test(methodWindow),
+    `${label} contract: shim must not mutate upstream body; BYOK-only override stripping belongs inside runtime shim`
+  );
+  assert(
+    !/arguments\s*\[\s*1\s*\]\s*[^;]{0,80}\.apiToken/.test(methodWindow),
+    `${label} contract: shim must not read upstream config apiToken before runtimeEnabled rollback gate`
+  );
+  assert(
+    !/arguments\s*\[\s*5\s*\]\s*[^;]{0,120}\.toString\s*\(/.test(methodWindow),
+    `${label} contract: shim must not stringify upstream completionURL before runtimeEnabled rollback gate`
+  );
+}
+
+function assertShimBefore(methodWindow, pattern, label, what) {
+  const shimIdx = methodWindow.indexOf("const __byok_host=this;");
+  assert(shimIdx >= 0, `${label} contract: injected shim missing`);
+  const match = methodWindow.match(pattern);
+  assert(match && typeof match.index === "number", `${label} contract: expected ${what}`);
+  assert(
+    shimIdx < match.index,
+    `${label} contract: injected shim must run before ${what} so runtimeEnabled=false has no upstream side effects`
+  );
+}
 
 function assertCallApiShimSignatureContracts(extJs) {
   const ident = (name) => `(?<![\\w$])${escapeRegExp(name)}(?![\\w$])`;
@@ -29,6 +60,25 @@ function assertCallApiShimSignatureContracts(extJs) {
   assert(cfgVar && endpointVar && completionUrlVar && abortSignalVar && apiTokenVar, `callApi contract: unexpected param shapes; params=${callApiMain.paramsText}`);
 
   const callApiWindow = extJs.slice(callApiMain.start, Math.min(extJs.length, callApiMain.start + 9000));
+  assertInjectedShimContext(callApiWindow, "callApi");
+  assertShimBefore(
+    callApiWindow,
+    new RegExp(`\\bnew\\s+URL\\s*\\(\\s*${escapeRegExp(endpointVar)}\\s*,\\s*${escapeRegExp(completionUrlVar)}\\s*\\)`),
+    "callApi",
+    `new URL(${endpointVar},${completionUrlVar})`
+  );
+  assertShimBefore(
+    callApiWindow,
+    new RegExp(`${ident(completionUrlVar)}\\s*=\\s*await\\s+this\\.clientAuth\\.getCompletionURL\\s*\\(`),
+    "callApi",
+    `${completionUrlVar}=await this.clientAuth.getCompletionURL(...)`
+  );
+  assertShimBefore(
+    callApiWindow,
+    new RegExp(`${ident(apiTokenVar)}\\s*=\\s*await\\s+this\\.clientAuth\\.getAPIToken\\s*\\(`),
+    "callApi",
+    `${apiTokenVar}=await this.clientAuth.getAPIToken(...)`
+  );
   assert(
     new RegExp(`\\bnew\\s+URL\\s*\\(\\s*${escapeRegExp(endpointVar)}\\s*,\\s*${escapeRegExp(completionUrlVar)}\\s*\\)`).test(callApiWindow),
     `callApi contract: expected new URL(${endpointVar},${completionUrlVar}) within method body`
@@ -41,12 +91,13 @@ function assertCallApiShimSignatureContracts(extJs) {
     new RegExp(`${ident(apiTokenVar)}\\s*=\\s*await\\s+this\\.clientAuth\\.getAPIToken\\s*\\(`).test(callApiWindow),
     `callApi contract: expected ${apiTokenVar}=await this.clientAuth.getAPIToken(...) within method body`
   );
-  const apiTokenCoalesceOk =
-    new RegExp(`${ident(apiTokenVar)}\\s*(?:\\?\\?|\\|\\|)\\s*${ident(cfgVar)}\\.apiToken(?![\\w$])`).test(callApiWindow) ||
-    INJECTED_UPSTREAM_API_TOKEN_COALESCE_RE.test(callApiWindow);
   assert(
-    apiTokenCoalesceOk,
-    `callApi contract: expected ${apiTokenVar}??${cfgVar}.apiToken (or injected arguments[10]??((arguments[1]||{}).apiToken)) within method body`
+    /upstreamApiToken\s*:\s*arguments\s*\[\s*10\s*\]/.test(callApiWindow),
+    "callApi contract: expected injected shim to pass only arguments[10] as upstreamApiToken"
+  );
+  assert(
+    /upstreamCompletionURL\s*:\s*arguments\s*\[\s*5\s*\]/.test(callApiWindow),
+    "callApi contract: expected injected shim to pass only arguments[5] as upstreamCompletionURL"
   );
   assert(
     new RegExp(
@@ -76,6 +127,25 @@ function assertCallApiShimSignatureContracts(extJs) {
   );
 
   const callApiStreamWindow = extJs.slice(callApiStreamMain.start, Math.min(extJs.length, callApiStreamMain.start + 9000));
+  assertInjectedShimContext(callApiStreamWindow, "callApiStream");
+  assertShimBefore(
+    callApiStreamWindow,
+    new RegExp(`\\bnew\\s+URL\\s*\\(\\s*${escapeRegExp(streamEndpointVar)}\\s*,\\s*${escapeRegExp(streamCompletionUrlVar)}\\s*\\)`),
+    "callApiStream",
+    `new URL(${streamEndpointVar},${streamCompletionUrlVar})`
+  );
+  assertShimBefore(
+    callApiStreamWindow,
+    new RegExp(`${ident(streamCompletionUrlVar)}\\s*=\\s*await\\s+this\\.clientAuth\\.getCompletionURL\\s*\\(`),
+    "callApiStream",
+    `${streamCompletionUrlVar}=await this.clientAuth.getCompletionURL(...)`
+  );
+  assertShimBefore(
+    callApiStreamWindow,
+    new RegExp(`${ident(streamCfgVar)}\\.apiToken(?![\\w$])`),
+    "callApiStream",
+    `${streamCfgVar}.apiToken`
+  );
   assert(
     new RegExp(`\\bnew\\s+URL\\s*\\(\\s*${escapeRegExp(streamEndpointVar)}\\s*,\\s*${escapeRegExp(streamCompletionUrlVar)}\\s*\\)`).test(callApiStreamWindow),
     `callApiStream contract: expected new URL(${streamEndpointVar},${streamCompletionUrlVar}) within method body`
@@ -87,6 +157,10 @@ function assertCallApiShimSignatureContracts(extJs) {
   assert(
     new RegExp(`${ident(streamCfgVar)}\\.apiToken(?![\\w$])`).test(callApiStreamWindow),
     `callApiStream contract: expected ${streamCfgVar}.apiToken usage within method body`
+  );
+  assert(
+    /upstreamCompletionURL\s*:\s*arguments\s*\[\s*5\s*\]/.test(callApiStreamWindow),
+    "callApiStream contract: expected injected shim to pass only arguments[5] as upstreamCompletionURL"
   );
   assert(
     new RegExp(

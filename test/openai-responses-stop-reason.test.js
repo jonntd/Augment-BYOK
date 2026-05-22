@@ -34,3 +34,21 @@ test("openai-responses: emitOpenAiResponsesJsonAsAugmentChunks uses mapped stop_
   const last = chunks[chunks.length - 1];
   assert.equal(last.stop_reason, STOP_REASON_MAX_TOKENS);
 });
+
+test("openai-responses: JSON failed status fails fast in chunk emitter", async () => {
+  const json = {
+    id: "resp_failed",
+    object: "response",
+    status: "failed",
+    error: { type: "invalid_request_error", message: "json failed" }
+  };
+
+  await assert.rejects(
+    async () => {
+      for await (const _ of emitOpenAiResponsesJsonAsAugmentChunks(json, { toolMetaByName: new Map(), supportToolUseStart: true })) {
+        // consume stream
+      }
+    },
+    /OpenAI\(responses-chat-stream\) upstream error: invalid_request_error: json failed/
+  );
+});

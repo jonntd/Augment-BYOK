@@ -1,59 +1,11 @@
 "use strict";
 
 const { debug, warn } = require("../../infra/log");
-const { normalizeString, normalizeRawToken, normalizeStringList } = require("../../infra/util");
+const { normalizeString, normalizeStringList } = require("../../infra/util");
 const { truncateTextForPrompt: truncateText } = require("../../infra/text");
-const { getOfficialConnection } = require("../../config/official");
 const { joinBaseUrl, safeFetch } = require("../../providers/http");
 const { readHttpErrorDetail } = require("../../providers/request-util");
-const { makeTextRequestNode, pickInjectionTargetArray, maybeInjectUserExtraTextParts } = require("./common");
-
-function normalizeExternalSourceIdsFromImplicitResult(raw) {
-  const out = [];
-  if (Array.isArray(raw)) out.push(...raw);
-  else if (raw && typeof raw === "object") {
-    const r = raw;
-    const candidates =
-      (Array.isArray(r.external_source_ids) && r.external_source_ids) ||
-      (Array.isArray(r.externalSourceIds) && r.externalSourceIds) ||
-      (Array.isArray(r.source_ids) && r.source_ids) ||
-      (Array.isArray(r.sourceIds) && r.sourceIds) ||
-      (Array.isArray(r.implicit_external_source_ids) && r.implicit_external_source_ids) ||
-      (Array.isArray(r.implicitExternalSourceIds) && r.implicitExternalSourceIds) ||
-      (Array.isArray(r.external_sources) && r.external_sources) ||
-      (Array.isArray(r.externalSources) && r.externalSources) ||
-      (Array.isArray(r.sources) && r.sources) ||
-      (Array.isArray(r.implicit_external_sources) && r.implicit_external_sources) ||
-      (Array.isArray(r.implicitExternalSources) && r.implicitExternalSources) ||
-      [];
-    out.push(...candidates);
-  }
-  const ids = [];
-  for (const it of out) {
-    if (typeof it === "string") ids.push(it);
-    else if (it && typeof it === "object") {
-      const obj = it;
-      const cand = obj.id ?? obj.source_id ?? obj.sourceId ?? obj.external_source_id ?? obj.externalSourceId ?? obj.externalSourceID ?? "";
-      if (typeof cand === "string") ids.push(cand);
-    }
-  }
-  return normalizeStringList(ids, { maxItems: 200 });
-}
-
-async function fetchOfficialImplicitExternalSources({ completionURL, apiToken, message, timeoutMs, abortSignal }) {
-  const url = joinBaseUrl(normalizeString(completionURL), "get-implicit-external-sources");
-  if (!url) throw new Error("completionURL 无效（无法请求官方 get-implicit-external-sources）");
-  const headers = { "content-type": "application/json" };
-  if (apiToken) headers.authorization = `Bearer ${apiToken}`;
-  const payload = { message: String(message || "") };
-  const resp = await safeFetch(
-    url,
-    { method: "POST", headers, body: JSON.stringify(payload) },
-    { timeoutMs, abortSignal, label: "augment/get-implicit-external-sources" }
-  );
-  if (!resp.ok) throw new Error(`get-implicit-external-sources ${resp.status}: ${await readHttpErrorDetail(resp, { maxChars: 300 })}`.trim());
-  return await resp.json().catch(() => null);
-}
+const { makeTextRequestNode, pickInjectionTargetArray, maybeInjectUserExtraTextParts, isOfficialContextDisabled, resolveOfficialContextConnection } = require("./common");
 
 async function fetchOfficialSearchExternalSources({ completionURL, apiToken, query, sourceTypes, timeoutMs, abortSignal }) {
   const url = joinBaseUrl(normalizeString(completionURL), "search-external-sources");
@@ -133,7 +85,7 @@ function formatExternalSourcesForPrompt(results, { selectedExternalSourceIds } =
 
 async function maybeInjectOfficialExternalSources({ req, timeoutMs, abortSignal, upstreamCompletionURL, upstreamApiToken }) {
   if (!req || typeof req !== "object") return false;
-  if (req.disable_retrieval === true) return false;
+  if (isOfficialContextDisabled(req)) return false;
 
   const msg = normalizeString(req?.message);
   if (!msg) return false;
@@ -142,33 +94,16 @@ async function maybeInjectOfficialExternalSources({ req, timeoutMs, abortSignal,
   const shouldAuto = req.disable_auto_external_sources !== true;
   if (!explicitExternalSourceIds.length && !shouldAuto) return false;
 
-  const off = getOfficialConnection();
-  const completionURL = normalizeString(upstreamCompletionURL) || off.completionURL;
-  const apiToken = normalizeRawToken(upstreamApiToken) || off.apiToken;
-  if (!completionURL || !apiToken) {
-    debug("officialExternalSources skipped: missing completionURL/apiToken");
-    return false;
-  }
+  const conn = resolveOfficialContextConnection({ feature: "external-sources", upstreamCompletionURL, upstreamApiToken });
+  if (!conn) return false;
+  const { completionURL, apiToken } = conn;
 
   const hardTimeout = Number.isFinite(Number(timeoutMs)) && Number(timeoutMs) > 0 ? Number(timeoutMs) : 120000;
   const t = Math.max(1500, Math.min(8000, Math.floor(hardTimeout * 0.25)));
-  const implicitTimeout = Math.max(1000, Math.min(3500, Math.floor(t * 0.4)));
-
-  let wantedIds = explicitExternalSourceIds;
-  if (!wantedIds.length && shouldAuto) {
-    try {
-      const implicit = await fetchOfficialImplicitExternalSources({ completionURL, apiToken, message: msg, timeoutMs: implicitTimeout, abortSignal });
-      const implicitIds = normalizeExternalSourceIdsFromImplicitResult(implicit);
-      if (implicitIds.length) wantedIds = implicitIds;
-    } catch (err) {
-      debug(`officialExternalSources implicit failed (ignored): ${err instanceof Error ? err.message : String(err)}`);
-    }
-  }
-  if (!wantedIds.length && shouldAuto) return false;
+  const wantedIds = explicitExternalSourceIds;
 
   try {
-    const searchTimeout = explicitExternalSourceIds.length ? t : Math.max(1500, t - implicitTimeout);
-    const raw = await fetchOfficialSearchExternalSources({ completionURL, apiToken, query: msg, sourceTypes: [], timeoutMs: searchTimeout, abortSignal });
+    const raw = await fetchOfficialSearchExternalSources({ completionURL, apiToken, query: msg, sourceTypes: [], timeoutMs: t, abortSignal });
     const results = normalizeOfficialExternalSourcesSearchResults(raw);
     if (!results.length) return false;
 
@@ -195,4 +130,3 @@ async function maybeInjectOfficialExternalSources({ req, timeoutMs, abortSignal,
 }
 
 module.exports = { maybeInjectOfficialExternalSources };
-

@@ -45,3 +45,70 @@ test("patchWebviewHistorySummaryNode: slims HISTORY_SUMMARY node with upstream r
     assert.ok(out.includes("__augment_byok_webview_history_summary_node_slim_v1"), "marker missing");
   });
 });
+
+test("patchWebviewHistorySummaryNode: patches every matching history summary asset", () => {
+  withTempDir("augment-byok-webview-hs-", (dir) => {
+    const extDir = path.join(dir, "extension");
+    const assetsDir = path.join(extDir, "common-webviews", "assets");
+    const fileA = path.join(assetsDir, "extension-client-context-a.js");
+    const fileB = path.join(assetsDir, "extension-client-context-b.js");
+
+    const src = [
+      `function wK(e){const t=e.history_end.map(x=>x).join("");return e.message_template.replace(/x/g,()=>t)}`,
+      `function GZ({summaryText:e,summarizationRequestId:t,numExchangesDroppedInBeginning:n,abridgedHistoryText:i,tail:a,messageTemplate:o,incrementalFields:r}){const s={summary_text:e,summarization_request_id:t,history_beginning_dropped_num_exchanges:n,history_middle_abridged_text:i,history_end:a,message_template:o,...r};return{id:0,type:Ze.HISTORY_SUMMARY,history_summary_node:s}}`
+    ].join("\n");
+    writeUtf8(fileA, src + "\n");
+    writeUtf8(fileB, src + "\n");
+
+    const result = patchWebviewHistorySummaryNode(extDir);
+    assert.equal(result.changed, true);
+    assert.equal(result.results.length, 2);
+
+    for (const filePath of [fileA, fileB]) {
+      const out = readUtf8(filePath);
+      assert.ok(out.includes("__augment_byok_webview_history_summary_node_slim_v1"), `${filePath}: marker missing`);
+      assert.ok(out.includes("type:Ze.TEXT"), `${filePath}: TEXT node not injected`);
+      assert.ok(!out.includes("type:Ze.HISTORY_SUMMARY,history_summary_node:s"), `${filePath}: HISTORY_SUMMARY node not removed`);
+    }
+  });
+});
+
+test("patchWebviewHistorySummaryNode: refuses ambiguous history summary formatter", () => {
+  withTempDir("augment-byok-webview-hs-", (dir) => {
+    const extDir = path.join(dir, "extension");
+    const assetsDir = path.join(extDir, "common-webviews", "assets");
+    const filePath = path.join(assetsDir, "extension-client-context-test.js");
+
+    const src = [
+      `function wK(e){const t=e.history_end.map(x=>x).join("");return e.message_template.replace(/x/g,()=>t)}`,
+      `function xK(e){const t=e.history_end.map(x=>x).join("");return e.message_template.replace(/x/g,()=>t)}`,
+      `function GZ(){const s={history_end:[]};return{id:0,type:Ze.HISTORY_SUMMARY,history_summary_node:s}}`
+    ].join("\n");
+    writeUtf8(filePath, src + "\n");
+
+    assert.throws(
+      () => patchWebviewHistorySummaryNode(extDir),
+      /history summary formatter matched multiple times/
+    );
+  });
+});
+
+test("patchWebviewHistorySummaryNode: validates already-marked assets", () => {
+  withTempDir("augment-byok-webview-hs-", (dir) => {
+    const extDir = path.join(dir, "extension");
+    const assetsDir = path.join(extDir, "common-webviews", "assets");
+    const filePath = path.join(assetsDir, "extension-client-context-test.js");
+
+    const src = [
+      `function wK(e){const t=e.history_end.map(x=>x).join("");return e.message_template.replace(/x/g,()=>t)}`,
+      `function GZ(){const s={history_end:[]};return{id:0,type:Ze.HISTORY_SUMMARY,history_summary_node:s}}`,
+      `;/*__augment_byok_webview_history_summary_node_slim_v1*/`
+    ].join("\n");
+    writeUtf8(filePath, src + "\n");
+
+    assert.throws(
+      () => patchWebviewHistorySummaryNode(extDir),
+      /HISTORY_SUMMARY node not rewritten to TEXT\/text_node|still carries upstream HISTORY_SUMMARY payload/
+    );
+  });
+});

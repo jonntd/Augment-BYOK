@@ -4,7 +4,7 @@ const { joinBaseUrl } = require("../http");
 const { normalizeString, requireString, normalizeRawToken, stripByokInternalKeys } = require("../../infra/util");
 const { truncateText, truncateTextMiddle } = require("../../infra/text");
 const { withJsonContentType, openAiAuthHeaders } = require("../headers");
-const { isInvalidRequestStatusForFallback } = require("../provider-util");
+const { isCompatibilityFallbackError } = require("../provider-util");
 const { fetchOkWithRetry } = require("../request-util");
 const { pickPositiveIntFromRecord, deleteKeysFromRecord } = require("../request-defaults-util");
 
@@ -276,7 +276,7 @@ async function fetchOpenAiChatCompletionResponseWithFallbackDefaults({
   try {
     return await fetchOnce(requestDefaults, "");
   } catch (err) {
-    const canFallback = isInvalidRequestStatusForFallback(err?.status);
+    const canFallback = isCompatibilityFallbackError(err);
     if (!canFallback) throw err;
     return await fetchOnce(minimalDefaults, ":minimal-defaults");
   }
@@ -285,25 +285,28 @@ async function fetchOpenAiChatCompletionResponseWithFallbackDefaults({
 async function postOpenAiChatStreamWithFallbacks({ baseUrl, apiKey, model, messages, tools, timeoutMs, abortSignal, extraHeaders, requestDefaults }) {
   const minimalDefaults = buildMinimalRetryRequestDefaults(requestDefaults);
   const visionStripped = stripVisionFromMessages(messages);
+  const functions = convertOpenAiToolsToFunctions(tools);
 
   const attempts = [
     { mode: "tools", includeUsage: true, includeToolChoice: true, tools, requestDefaults },
     { mode: "tools", includeUsage: false, includeToolChoice: true, tools, requestDefaults },
     { mode: "tools", includeUsage: false, includeToolChoice: false, tools, requestDefaults },
-    { mode: "tools", includeUsage: false, includeToolChoice: false, tools, requestDefaults: minimalDefaults },
+    { mode: "tools", includeUsage: false, includeToolChoice: false, tools, requestDefaults: minimalDefaults }
+  ];
+  if (visionStripped.changed) {
+    attempts.push({ mode: "tools", includeUsage: false, includeToolChoice: false, tools, requestDefaults: minimalDefaults, messages: visionStripped.messages });
+  }
+  attempts.push(
     {
       mode: "functions",
-      functions: convertOpenAiToolsToFunctions(tools),
+      functions,
       requestDefaults: minimalDefaults,
       messages: visionStripped.changed ? visionStripped.messages : null
     },
     { mode: "tools", includeUsage: false, includeToolChoice: false, tools: [], requestDefaults: minimalDefaults }
-  ];
+  );
   if (visionStripped.changed) {
-    attempts.push(
-      { mode: "tools", includeUsage: false, includeToolChoice: false, tools, requestDefaults: minimalDefaults, messages: visionStripped.messages },
-      { mode: "tools", includeUsage: false, includeToolChoice: false, tools: [], requestDefaults: minimalDefaults, messages: visionStripped.messages }
-    );
+    attempts.push({ mode: "tools", includeUsage: false, includeToolChoice: false, tools: [], requestDefaults: minimalDefaults, messages: visionStripped.messages });
   }
 
   let lastErr = null;
@@ -339,7 +342,7 @@ async function postOpenAiChatStreamWithFallbacks({ baseUrl, apiKey, model, messa
       });
     } catch (err) {
       lastErr = err;
-      const canFallback = isInvalidRequestStatusForFallback(err?.status);
+      const canFallback = isCompatibilityFallbackError(err);
       if (!canFallback) throw err;
     }
   }

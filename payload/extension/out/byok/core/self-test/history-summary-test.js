@@ -73,13 +73,15 @@ async function selfTestHistorySummary({ cfg, fallbackProvider, fallbackModel, ti
   const injected1 = Array.isArray(req1.request_nodes) && req1.request_nodes.some((n) => shared.normalizeNodeType(n) === REQUEST_NODE_HISTORY_SUMMARY);
   const injected2 = Array.isArray(req2.request_nodes) && req2.request_nodes.some((n) => shared.normalizeNodeType(n) === REQUEST_NODE_HISTORY_SUMMARY);
 
-  if (ok1 && ok2) {
+  if (ok1 && ok2 && injected1 && injected2) {
     log(`[historySummary] ok (run1=${run1.ms}ms injected=${injected1} run2=${run2.ms}ms injected=${injected2})`);
     // run2 应该命中 cache（一般更快），但不同环境也可能依旧触发网络；这里只做观察信息
     return { ok: true, ms: run1.ms + run2.ms, detail: `run1=${run1.ms}ms run2=${run2.ms}ms` };
   }
 
-  const detail = `run1=${run1.ok ? String(run1.res) : run1.error} run2=${run2.ok ? String(run2.res) : run2.error}`;
+  const detail =
+    `run1=${run1.ok ? String(run1.res) : run1.error} injected1=${injected1} ` +
+    `run2=${run2.ok ? String(run2.res) : run2.error} injected2=${injected2}`;
   return { ok: false, ms: run1.ms + run2.ms, detail };
 }
 

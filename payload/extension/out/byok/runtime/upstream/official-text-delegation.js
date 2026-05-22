@@ -3,7 +3,6 @@
 const { normalizeEndpoint, normalizeString } = require("../../infra/util");
 const { isOfficialExecutionDelegationEndpoint, isOfficialDelegationEndpoint } = require("../../core/official-delegation");
 const { normalizeRole, toText } = require("./text-assembly/prompt-utils");
-const { tryFromEndpointFields } = require("./text-assembly/endpoint-fields");
 const {
   isObject,
   normalizeDelegationSource,
@@ -125,11 +124,28 @@ function tryFromDeepSearch(rawBody) {
     if (depth >= MAX_DEPTH) continue;
     for (const [k, child] of Object.entries(v)) {
       if (SKIP_KEYS.has(k)) continue;
+      if (depth === 0 && isEndpointFieldKey(k)) continue;
       stack.push({ v: child, depth: depth + 1 });
     }
   }
 
   return null;
+}
+
+function isEndpointFieldKey(key) {
+  const k = normalizeString(key).toLowerCase();
+  return (
+    k === "message" ||
+    k === "prompt" ||
+    k === "instruction" ||
+    k === "diff" ||
+    k === "prefix" ||
+    k === "suffix" ||
+    k === "selected_text" ||
+    k === "selectedtext" ||
+    k === "selected_code" ||
+    k === "selectedcode"
+  );
 }
 
 async function maybeBuildDelegatedTextPrompt({
@@ -141,7 +157,7 @@ async function maybeBuildDelegatedTextPrompt({
   if (isOfficialDelegationEndpoint(ep)) return { ok: false, reason: "chat_endpoint_use_chat_delegation" };
 
   const rawBody = isObject(body) ? body : {};
-  const delegated = tryFromMessages(rawBody) || tryFromResponsesInput(rawBody) || tryFromDeepSearch(rawBody) || tryFromEndpointFields(ep, rawBody);
+  const delegated = tryFromMessages(rawBody) || tryFromResponsesInput(rawBody) || tryFromDeepSearch(rawBody);
 
   if (!delegated) {
     auditDelegationMiss(`official text assembler delegated miss: ep=${ep}`, "invalid_request_body");

@@ -1,7 +1,7 @@
 "use strict";
 
 const { withTiming, traceAsyncGenerator } = require("../../../infra/trace");
-const { normalizeString, safeTransform, emptyAsyncGenerator } = require("../../../infra/util");
+const { normalizeString, safeTransform, emptyAsyncGenerator, stripUpstreamProviderOverrideKeys } = require("../../../infra/util");
 const { makeEndpointErrorText, guardObjectStream } = require("../../../core/stream-guard");
 const { makeBackChatResult, makeBackNextEditGenerationChunk } = require("../../../core/protocol");
 const { pickPath, pickBlobNameHint } = require("../../../core/next-edit/fields");
@@ -13,10 +13,9 @@ const { resolveByokRouteContext } = require("../route");
 const { resolveByokTextPromptContext } = require("../text-assembly");
 const {
   buildByokTextTraceLabel,
-  wrapChatResultTextDeltas,
-  wrapInstructionTextDeltas
+  wrapChatResultTextDeltas
 } = require("../text-stream-output");
-const { maybeAugmentBodyWithWorkspaceBlob, buildInstructionReplacementMeta } = require("../next-edit");
+const { maybeAugmentBodyWithWorkspaceBlob } = require("../next-edit");
 const { formatRouteForLog } = require("../common");
 const { rememberUpstreamCallHost } = require("../../upstream/discovery");
 
@@ -81,21 +80,6 @@ async function handleChatResultDeltaStream({ cfg, route, ep, body, transform, ti
   });
 }
 
-async function handleInstructionLikeStream({ cfg, route, ep, body, transform, timeoutMs, abortSignal, requestId }) {
-  const meta = await buildInstructionReplacementMeta(body);
-  const deltas = await makeByokTextDeltas({ cfg, route, ep, body, timeoutMs, abortSignal, requestId, labelSuffix: "delta" });
-  const src = wrapInstructionTextDeltas(deltas, { meta });
-
-  return guardWithMeta({
-    ep,
-    transform,
-    src,
-    requestId,
-    route,
-    makeErrorChunk: (err) => ({ text: makeEndpointErrorText(ep, err), ...meta })
-  });
-}
-
 async function handleNextEditStream({ cfg, route, ep, body, transform, timeoutMs, abortSignal, requestId }) {
   const b = body && typeof body === "object" ? body : {};
   const hasPrefix = typeof b.prefix === "string";
@@ -133,8 +117,6 @@ async function handleNextEditStream({ cfg, route, ep, body, transform, timeoutMs
 const CALL_API_STREAM_HANDLERS = {
   "/chat-stream": handleChatStream,
   "/prompt-enhancer": handleChatResultDeltaStream,
-  "/instruction-stream": handleInstructionLikeStream,
-  "/smart-paste-stream": handleInstructionLikeStream,
   "/generate-commit-message-stream": handleChatResultDeltaStream,
   "/next-edit-stream": handleNextEditStream
 };
@@ -142,22 +124,24 @@ const CALL_API_STREAM_HANDLERS = {
 const SUPPORTED_CALL_API_STREAM_ENDPOINTS = Object.freeze(Object.keys(CALL_API_STREAM_HANDLERS).sort());
 
 async function maybeHandleCallApiStream({ endpoint, body, transform, timeoutMs, abortSignal, upstreamApiToken, upstreamCompletionURL, upstreamCallHost }) {
-  rememberUpstreamCallHost(upstreamCallHost, { stream: true });
+  const requestBody = stripUpstreamProviderOverrideKeys(body);
   const { requestId, ep, timeoutMs: t, cfg, route, runtimeEnabled } = await resolveByokRouteContext({
     endpoint,
-    body,
+    body: requestBody,
     timeoutMs,
-    logPrefix: "callApiStream"
+    logPrefix: "callApiStream",
+    supportedEndpoints: SUPPORTED_CALL_API_STREAM_ENDPOINTS
   });
   if (!ep) return undefined;
   if (!runtimeEnabled) return undefined;
+  rememberUpstreamCallHost(upstreamCallHost, { stream: true });
   if (route.mode === "official") return undefined;
   if (route.mode === "disabled") return emptyAsyncGenerator();
   if (route.mode !== "byok") return undefined;
 
   const handler = CALL_API_STREAM_HANDLERS[ep];
   if (!handler) return undefined;
-  return await handler({ cfg, route, ep, body, transform, timeoutMs: t, abortSignal, upstreamApiToken, upstreamCompletionURL, requestId });
+  return await handler({ cfg, route, ep, body: requestBody, transform, timeoutMs: t, abortSignal, upstreamApiToken, upstreamCompletionURL, requestId });
 }
 
 module.exports = { maybeHandleCallApiStream, SUPPORTED_CALL_API_STREAM_ENDPOINTS };
