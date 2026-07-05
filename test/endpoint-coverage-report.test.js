@@ -64,7 +64,6 @@ test("endpoint-coverage: fail-fast when UI endpoint catalog misses an upstream e
         "/chat-input-completion": { callApi: 1, callApiStream: 0 },
         "/chat-stream": { callApi: 0, callApiStream: 1 },
         "/prompt-enhancer": { callApi: 0, callApiStream: 1 },
-        "/next-edit-stream": { callApi: 0, callApiStream: 1 },
         "/generate-commit-message-stream": { callApi: 0, callApiStream: 1 },
         "/new-upstream-endpoint": { callApi: 1, callApiStream: 0 }
       })
@@ -78,7 +77,6 @@ test("endpoint-coverage: fail-fast when UI endpoint catalog misses an upstream e
         "/chat-input-completion",
         "/chat-stream",
         "/prompt-enhancer",
-        "/next-edit-stream",
         "/generate-commit-message-stream"
       ])
     );
@@ -103,7 +101,6 @@ test("endpoint-coverage: fail-fast when UI endpoint catalog keeps a stale endpoi
       "/chat-input-completion": { callApi: 1, callApiStream: 0 },
       "/chat-stream": { callApi: 0, callApiStream: 1 },
       "/prompt-enhancer": { callApi: 0, callApiStream: 1 },
-      "/next-edit-stream": { callApi: 0, callApiStream: 1 },
       "/generate-commit-message-stream": { callApi: 0, callApiStream: 1 }
     };
     writeJson(analysisPath, makeAnalysis(endpointDetails));

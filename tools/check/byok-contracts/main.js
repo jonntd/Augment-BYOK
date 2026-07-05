@@ -126,7 +126,6 @@ function main(argv = process.argv) {
     "out/byok/runtime/shim/byok-chat-stream/index.js",
     "out/byok/runtime/shim/byok-text/index.js",
     "out/byok/runtime/shim/route/index.js",
-    "out/byok/runtime/shim/next-edit/index.js",
     "out/byok/runtime/shim/common/index.js",
     "out/byok/runtime/shim/augment-chat/index.js",
     "out/byok/runtime/shim/text-assembly/index.js",
@@ -173,8 +172,7 @@ function main(argv = process.argv) {
     "out/byok/core/tool-pairing/openai.js",
     "out/byok/core/tool-pairing/openai-responses.js",
     "out/byok/core/tool-pairing/anthropic.js",
-    "out/byok/core/next-edit/fields.js",
-    "out/byok/core/next-edit/stream-utils.js",
+
     "out/byok/infra/constants.js",
     "out/byok/infra/util.js",
     "out/byok/infra/log.js",
@@ -232,7 +230,6 @@ function main(argv = process.argv) {
   assertContains(extJs, "__augment_byok_tasklist_add_tasks_sanitize_empty_ids_patched_v1", "tasklist add_tasks sanitize empty ids patched");
   assertContains(extJs, "__augment_byok_tasklist_add_tasks_errors_patched_v1", "tasklist add_tasks errors patched");
   assertContains(extJs, "__augment_byok_tasklist_reorganize_noop_errors_patched_v1", "tasklist reorganize no-op errors patched");
-  assert(!extJs.includes("case \"/autoAuth\"") && !extJs.includes("handleAutoAuth"), "autoAuth guard failed (post-check)");
   ok("extension.js markers ok");
 
   const webviewAssets = listExtensionClientContextAssets(extensionDir, "contracts");

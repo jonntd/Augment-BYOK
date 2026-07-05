@@ -160,9 +160,8 @@ test("runtime disabled: all BYOK-supported endpoints skip config/audit/upstream/
       }
 
       for (const endpoint of SUPPORTED_CALL_API_STREAM_ENDPOINTS) {
-        const body = endpoint === "/next-edit-stream" ? { ...byokBody, path: "/workspace/file.js" } : byokBody;
         const { result, calls } = await captureAudit(() =>
-          maybeHandleCallApiStream({ endpoint, body, timeoutMs: 1000, upstreamCallHost: callApiStreamHost })
+          maybeHandleCallApiStream({ endpoint, body: byokBody, timeoutMs: 1000, upstreamCallHost: callApiStreamHost })
         );
         assert.equal(result, undefined, endpoint);
         assert.deepEqual(calls, [], endpoint);
@@ -271,13 +270,13 @@ test("callApiStream boundary: third_party_override is stripped before delegated 
 test("callApi boundary: byok model on unsupported endpoint stays official", async () => {
   await withRuntimeState({ runtimeEnabled: true, cfg: makeUsableConfig() }, async () => {
     const { result, calls } = await captureAudit(() =>
-      maybeHandleCallApi({ endpoint: "/record-request-events", body: { model: "byok:openai:gpt-5.2" }, timeoutMs: 1000 })
+      maybeHandleCallApi({ endpoint: "/unknown-future-endpoint", body: { model: "byok:openai:gpt-5.2" }, timeoutMs: 1000 })
     );
 
     assert.equal(result, undefined);
     assert.equal(calls.length, 1);
     assert.match(calls[0], /\[callApi\]/);
-    assert.match(calls[0], /ep=\/record-request-events/);
+    assert.match(calls[0], /ep=\/unknown-future-endpoint/);
     assert.match(calls[0], /mode=official/);
     assert.match(calls[0], /reason=unsupported_byok_endpoint/);
     assert.doesNotMatch(calls[0], /mode=byok/);

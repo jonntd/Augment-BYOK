@@ -14,7 +14,7 @@ function patchExtensionEntry(filePath) {
 
   const activateVar = findExportedFactoryVar(original, "activate");
   const injection =
-    `\n;require("./byok/runtime/bootstrap").install({vscode:require("vscode"),getActivate:()=>${activateVar},setActivate:e=>{${activateVar}=e}})\n` +
+    `\n;require("./byok/runtime/bootstrap").install({vscode:require("vscode"),getActivate:()=>exports.activate,setActivate:e=>{Object.defineProperty(exports,"activate",{value:e,configurable:true,writable:true});${activateVar}=e}})\n` +
     `;/*${MARKER}*/\n`;
   const next = insertBeforeSourceMappingURL(original, injection);
   writeText(filePath, next);

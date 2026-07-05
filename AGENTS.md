@@ -117,9 +117,9 @@
 
 ### 端点与路由契约
 
-- BYOK 只实现 **8 个 LLM 数据面端点**，单一真相在 `tools/report/llm-endpoints-spec.js`：
+- BYOK 只实现 **7 个 LLM 数据面端点**，单一真相在 `tools/report/llm-endpoints-spec.js`：
   - `callApi`：`/get-models`、`/chat`、`/completion`、`/chat-input-completion`
-  - `callApiStream`：`/chat-stream`、`/prompt-enhancer`、`/next-edit-stream`、`/generate-commit-message-stream`
+  - `callApiStream`：`/chat-stream`、`/prompt-enhancer`、`/generate-commit-message-stream`
 - **已删除且禁止恢复**的旧端点字符串：
   - `/edit`
   - `/generate-conversation-title`
@@ -277,7 +277,6 @@
 - 不要手改任何 `BEGIN GENERATED` / `END GENERATED` 区块；先改单一真相，再运行 `npm run gen:*`。
 - 不要恢复这些已删除路径/语义：`/edit`、`/generate-conversation-title`、`/next_edit_loc`、`/instruction-stream`、`/smart-paste-stream`。
 - 不要恢复 `tooluseonly` / `toolusefix` 或其他已知会导致主面板空白的 webview fallback 思路。
-- 不要引入 `autoAuth`、`augment.advanced.*` settings、env/yaml/SecretStorage 配置源、请求级 `delegate_*` 覆盖或 `officialDelegation` 开关。
 - 不要在 patch 层原地改 upstream body；`third_party_override` 的清理属于 runtime shim。
 - 不要把 provider.type 分支散落到非允许模块。
 - 不要绕过 `infra/log.js`，也不要新增会打印 token/apiKey/cookie/tool arguments/tool input 的日志。

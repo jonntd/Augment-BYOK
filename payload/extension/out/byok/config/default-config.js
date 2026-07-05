@@ -73,18 +73,37 @@ function defaultConfig() {
         "/chat-input-completion": { mode: "byok" },
         "/chat-stream": { mode: "byok" },
         "/prompt-enhancer": { mode: "byok" },
-        "/next-edit-stream": { mode: "byok" },
         "/generate-commit-message-stream": { mode: "byok" },
         /* END GENERATED: DEFAULT_LLM_ROUTING_RULES */
 
         "/client-metrics": { mode: "disabled" },
         "/client-completion-timelines": { mode: "disabled" },
-        "/record-request-events": { mode: "official" },
+        "/record-request-events": { mode: "disabled" },
         "/record-session-events": { mode: "disabled" },
         "/record-user-events": { mode: "disabled" },
-        "/report-error": { mode: "official" },
+        "/report-error": { mode: "disabled" },
         "/resolve-completions": { mode: "disabled" },
-        "/resolve-edit": { mode: "disabled" }
+        "/resolve-edit": { mode: "disabled" },
+        "/notifications/read": { mode: "disabled" },
+        "/find-missing": { mode: "disabled" },
+        "/remote-agents/list": { mode: "disabled" },
+        "/batch-upload": { mode: "disabled" },
+        "/checkpoint-blobs": { mode: "disabled" },
+        "/save-chat": { mode: "disabled" },
+        "/context-canvas/list": { mode: "disabled" },
+        "/search-external-sources": { mode: "disabled" },
+        "/indexed-commits/get-latest-blobset": { mode: "disabled" },
+        "/indexed-commits/register-blobset": { mode: "disabled" },
+        "/chat/exchanges/list": { mode: "disabled" },
+        "/cloud-agents/agents/send-message": { mode: "disabled" },
+        "/cloud-agents/agents/rename": { mode: "disabled" },
+        "/cloud-experts/experts/create-agent": { mode: "disabled" },
+        "/token": { mode: "disabled" },
+        "/get-credit-info": { mode: "disabled" },
+        "/get-billing-summary": { mode: "disabled" },
+        "/subscription-banner": { mode: "disabled" },
+        "/settings/get-tenant-tool-permissions": { mode: "disabled" },
+        "/chat-feedback": { mode: "disabled" }
       }
     }
   };

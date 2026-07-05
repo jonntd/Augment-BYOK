@@ -7,7 +7,7 @@
   const ENDPOINT_GROUPS_V1 = [
     {
       id: "llm_data_plane",
-      label: "LLM 数据面（8）",
+      label: "LLM 数据面（7）",
       endpoints: [
         /* BEGIN GENERATED: LLM_ENDPOINTS */
         "/get-models",
@@ -16,7 +16,6 @@
         "/chat-input-completion",
         "/chat-stream",
         "/prompt-enhancer",
-        "/next-edit-stream",
         "/generate-commit-message-stream"
         /* END GENERATED: LLM_ENDPOINTS */
       ]
@@ -61,9 +60,10 @@
     },
     {
       id: "cloud_agents_experts",
-      label: "Cloud Agents / Experts（2）",
+      label: "Cloud Agents / Experts（3）",
       endpoints: [
         "/cloud-agents/agents/send-message",
+        "/cloud-agents/agents/rename",
         "/cloud-experts/experts/create-agent"
       ]
     },
@@ -80,7 +80,7 @@
     },
     {
       id: "feedback_telemetry_debug",
-      label: "反馈/遥测/调试（11）",
+      label: "反馈/遥测/调试（10）",
       endpoints: [
         "/chat-feedback",
         "/client-metrics",
@@ -91,8 +91,7 @@
         "/report-error",
         "/resolve-completions",
         "/resolve-chat-input-completion",
-        "/resolve-edit",
-        "/resolve-next-edit"
+        "/resolve-edit"
       ]
     },
     {
@@ -113,7 +112,6 @@
     "/chat-input-completion": "Chat 输入框智能补全",
     "/chat-stream": "核心聊天流（Augment NDJSON）",
     "/prompt-enhancer": "提示词增强（stream）",
-    "/next-edit-stream": "Next Edit 建议（stream）",
     "/generate-commit-message-stream": "Commit message（stream）",
     /* END GENERATED: LLM_ENDPOINT_MEANINGS */
 
@@ -141,6 +139,7 @@
     "/chat/exchanges/list": "Chat exchanges 列表",
 
     "/cloud-agents/agents/send-message": "Cloud agent 发送消息",
+    "/cloud-agents/agents/rename": "Cloud agent 重命名",
     "/cloud-experts/experts/create-agent": "Cloud expert 创建 agent",
 
     "/token": "token 获取/刷新（鉴权相关）",
@@ -159,7 +158,6 @@
     "/resolve-completions": "resolve*（日志/归因类）",
     "/resolve-chat-input-completion": "resolve*（日志/归因类）",
     "/resolve-edit": "resolve*（日志/归因类）",
-    "/resolve-next-edit": "resolve*（日志/归因类）",
 
     "/notifications/read": "拉取通知",
     "/notifications/mark-as-read": "标记已读"

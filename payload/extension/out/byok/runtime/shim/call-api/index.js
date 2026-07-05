@@ -136,9 +136,9 @@ async function maybeHandleCallApi({ endpoint, body, transform, timeoutMs, abortS
   if (route.mode === "official") return undefined;
   if (route.mode === "disabled") {
     try {
-      return safeTransform(transform, {}, `disabled:${ep}`);
+      return safeTransform(transform, { tools: [], agents: [], items: [], data: [], results: [] }, `disabled:${ep}`);
     } catch {
-      return {};
+      return { tools: [], agents: [], items: [], data: [], results: [] };
     }
   }
   if (route.mode !== "byok") return undefined;

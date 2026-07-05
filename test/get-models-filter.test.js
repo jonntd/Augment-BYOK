@@ -83,7 +83,7 @@ test("handleGetModels: disabled route stays no-op even with BYOK model override"
       upstreamCompletionURL: "http://127.0.0.1:1/",
       upstreamApiToken: "ace-test"
     });
-    assert.deepEqual(out, {});
+    assert.deepEqual(out, { tools: [], agents: [], items: [], data: [], results: [] });
   });
 });
 

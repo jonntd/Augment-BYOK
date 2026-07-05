@@ -35,14 +35,14 @@
 
 协议适配细节（工具/stop_reason/用量/兜底/常见网关差异）见本文“Provider 支持矩阵”。
 
-## 8 个端点（会被 BYOK shim 接管）
+## 7 个端点（会被 BYOK shim 接管）
 
 - `callApi`（4）：`/get-models`、`/chat`、`/completion`、`/chat-input-completion`
-- `callApiStream`（4）：`/chat-stream`、`/prompt-enhancer`、`/next-edit-stream`、`/generate-commit-message-stream`
+- `callApiStream`（3）：`/chat-stream`、`/prompt-enhancer`、`/generate-commit-message-stream`
 
-> 当前上游 `augment/vscode-augment@0.871.0` 已无 `/edit`、`/generate-conversation-title`、`/next_edit_loc`、`/instruction-stream` 与 `/smart-paste-stream`，因此默认 BYOK 覆盖矩阵同步收敛为 8 个端点。
+> 当前上游 `augment/vscode-augment` 已无 `/edit`、`/generate-conversation-title`、`/next_edit_loc`、`/instruction-stream`、`/smart-paste-stream` 与 `/next-edit-stream`，因此默认 BYOK 覆盖矩阵同步收敛为 7 个端点。
 
-完整端点范围（48/8）见本文“端点覆盖（48 / 8）与路由策略”。
+完整端点范围（47/7）见本文“端点覆盖（47 / 7）与路由策略”。
 
 ## 排障（高频）
 
@@ -76,7 +76,6 @@
 - [x] 配置来源单一：只用 VS Code extension `globalState`（含 Key/Token，不参与 Sync）
 - [x] 运行时开关单独存储并参与 Sync：仅 `augment-byok.runtimeEnabled.v1` 加入 Sync，方便“跨设备一键回滚”
 - [ ] 非目标：复刻控制面/权限/Secrets/遥测/Remote Agents（保持官方实现；必要时可用 `disabled` 兜底）
-- [ ] 非目标：autoAuth（构建期 guard 明确禁止；命中直接 fail-fast）
 - [ ] 非目标：引入 env/yaml/SecretStorage 作为配置源（避免多源漂移与审计难度）
 
 ### 1) 构建与产物（Build / Artifacts）
@@ -158,7 +157,6 @@
 
 #### 2.10 构建期 guard + contracts（fail-fast）
 
-- [x] `autoAuth=0` guard：构建产物中命中 `autoAuth` 字符串直接失败
   - [x] guard 脚本：`tools/patch/guard-no-autoauth.js`
 - [x] `node --check`：对关键注入后的 JS 做语法检查（避免产物不可加载）
   - [x] 检查脚本：`tools/check/node-check-js.js`
@@ -261,18 +259,18 @@
 - [x] 兜底：summary 生成失败/超时/未配置时，仍会注入 fallback summary 强制压缩（避免请求过大导致直接失败）
 - [x] 兜底：`end_part_full` 中的 `tool_result` / `tool_use input` 会中间截断（保留尾部引用 id），防止单个工具输出撑爆上下文
 
-### 5) 端点覆盖（48 / 8）与路由策略
+### 5) 端点覆盖（47 / 7）与路由策略
 
 #### 5.1 端点全集与覆盖矩阵
 
 - [x] 上游端点全集：`npm run upstream:analyze` → `.cache/reports/upstream-analysis.json`
 - [x] LLM 覆盖矩阵：`npm run report:coverage` → `dist/endpoint-coverage.report.md`
-- [x] 端点说明：本文“端点覆盖（48 / 8）与路由策略”
+- [x] 端点说明：本文“端点覆盖（47 / 7）与路由策略”
 
-#### 5.2 8 个 LLM 数据面端点（BYOK 语义实现）
+#### 5.2 7 个 LLM 数据面端点（BYOK 语义实现）
 
 - [x] `callApi`（4）：`/get-models`、`/chat`、`/completion`、`/chat-input-completion`
-- [x] `callApiStream`（4）：`/chat-stream`、`/prompt-enhancer`、`/next-edit-stream`、`/generate-commit-message-stream`
+- [x] `callApiStream`（3）：`/chat-stream`、`/prompt-enhancer`、`/generate-commit-message-stream`
 - [x] 单一真相维护：`tools/report/llm-endpoints-spec.js`
 - [x] 自动生成同步：`npm run gen:llm-endpoints`（更新 UI + 默认 routing rules + official delegation）
 - [x] shim 二次约束：未实现端点即使携带 `byok:*` model override，也保持 official，不进入 BYOK 执行路径
@@ -345,12 +343,7 @@
 
 - [x] 语义同 `/prompt-enhancer`（同一实现）
 
-#### 7.4 `/next-edit-stream`（伪流式：一次性生成 next edit chunk）
-
-- [x] 若请求缺 prefix/suffix：自动从 workspace blob 补齐上下文（pathHint + blobNameHint）
-- [x] 调用 provider 非流式 complete：一次性生成 `suggestedCode`
-- [x] 输出结构：`makeBackNextEditGenerationChunk({ path, blobName, charStart, charEnd, existingCode, suggestedCode })`
-- [-] 当前实现为单 chunk（不做逐 token streaming），但保持 stream 接口兼容上游调用方式
+> **已移除**：`/next-edit-stream` 已被上游删除，BYOK 不再拦截此端点。
 
 ### 8) Provider 支持矩阵（上游 LLM 兼容层）
 
@@ -509,7 +502,6 @@
 - [x] rolling release：push 默认分支自动构建并更新 `rolling` tag 的 Release
 - [x] upstream-check：定时拉取最新上游 VSIX，版本变化则 PR 更新 `upstream.lock.json`
 - [x] 审计入口：`upstream.lock.json` / `dist/upstream.lock.json` / `dist/endpoint-coverage.report.md`
-- [x] fail-fast：patch needle 缺失 / 命中 autoAuth / 合约失败 / LLM 端点 spec 漂移 / provider types 生成结果未提交
 
 ### 16) 待优化 / 规划
 

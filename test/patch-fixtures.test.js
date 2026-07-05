@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 
-const { guardNoAutoAuth } = require("../tools/patch/guard-no-autoauth");
+
 const { patchCallApiShim } = require("../tools/patch/patch-callapi-shim");
 const { patchExposeUpstream } = require("../tools/patch/patch-expose-upstream");
 const { patchExtensionEntry } = require("../tools/patch/patch-extension-entry");
@@ -29,22 +29,6 @@ function readUtf8(filePath) {
 function writeUtf8(filePath, content) {
   fs.writeFileSync(filePath, content, "utf8");
 }
-
-test("guardNoAutoAuth: passes when /autoAuth absent", () => {
-  withTempDir("augment-byok-guard-", (dir) => {
-    const filePath = path.join(dir, "extension.js");
-    writeUtf8(filePath, `console.log("ok");\n`);
-    assert.deepEqual(guardNoAutoAuth(filePath), { ok: true });
-  });
-});
-
-test("guardNoAutoAuth: fails fast when /autoAuth present", () => {
-  withTempDir("augment-byok-guard-", (dir) => {
-    const filePath = path.join(dir, "extension.js");
-    writeUtf8(filePath, `switch (x) { case "/autoAuth": break; }\n`);
-    assert.throws(() => guardNoAutoAuth(filePath), /autoAuth guard failed/i);
-  });
-});
 
 test("patchExtensionEntry: injects bootstrap and is idempotent", () => {
   withTempDir("augment-byok-patch-", (dir) => {

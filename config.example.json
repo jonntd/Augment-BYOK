@@ -68,17 +68,19 @@
       "/prompt-enhancer": { "mode": "byok" },
       "/completion": { "mode": "byok" },
       "/chat-input-completion": { "mode": "byok" },
-      "/next-edit-stream": { "mode": "byok" },
       "/generate-commit-message-stream": { "mode": "byok" },
 
       "/client-metrics": { "mode": "disabled" },
       "/client-completion-timelines": { "mode": "disabled" },
-      "/record-request-events": { "mode": "official" },
+      "/record-request-events": { "mode": "disabled" },
       "/record-session-events": { "mode": "disabled" },
       "/record-user-events": { "mode": "disabled" },
-      "/report-error": { "mode": "official" },
+      "/report-error": { "mode": "disabled" },
       "/resolve-completions": { "mode": "disabled" },
-      "/resolve-edit": { "mode": "disabled" }
+      "/resolve-edit": { "mode": "disabled" },
+      "/notifications/read": { "mode": "disabled" },
+      "/find-missing": { "mode": "disabled" },
+      "/remote-agents/list": { "mode": "disabled" }
     }
   },
   "historySummary": {

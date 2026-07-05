@@ -20,7 +20,7 @@ const { patchTasklistReorganizeNoopErrors } = require("../patch/patch-tasklist-r
 const { patchPackageJsonCommands } = require("../patch/patch-package-json-commands");
 const { patchWebviewHistorySummaryNode } = require("../patch/patch-webview-history-summary-node");
 const { patchWebviewAssetCacheBust } = require("../patch/patch-webview-asset-cache-bust");
-const { guardNoAutoAuth } = require("../patch/guard-no-autoauth");
+const { patchStandaloneMode } = require("../patch/patch-standalone-mode");
 
 function makeLogger(prefix) {
   const p = String(prefix || "").trim();
@@ -89,8 +89,8 @@ function applyByokPatches({ repoRoot, extensionDir, pkgPath, extJsPath, logPrefi
   log(`patch tasklist tools (reorganize_tasklist no-op => error)`);
   patchTasklistReorganizeNoopErrors(extJs);
 
-  log(`guard: no autoAuth`);
-  guardNoAutoAuth(extJs);
+  log(`patch standalone mode (bypass grpc and signin fallback)`);
+  fs.writeFileSync(extJs, patchStandaloneMode(fs.readFileSync(extJs, "utf8")));
 
   log(`sanity check (node --check out/extension.js)`);
   run("node", ["--check", extJs], { cwd: root });

@@ -89,9 +89,9 @@ test("decideRoute: disabled get-models rule beats model override", () => {
 
 test("decideRoute: model override forces byok when rule is official", () => {
   const cfg = enableOpenAi(defaultConfig());
-  const r = decideRoute({ cfg, endpoint: "/record-request-events", body: { model: "byok:openai:gpt-4o-mini" }, runtimeEnabled: true });
+  const r = decideRoute({ cfg, endpoint: "/unknown-future-endpoint", body: { model: "byok:openai:gpt-4o-mini" }, runtimeEnabled: true });
   assert.equal(r.mode, "byok");
-  assert.equal(r.endpoint, "/record-request-events");
+  assert.equal(r.endpoint, "/unknown-future-endpoint");
   assert.equal(r.reason, "model_override");
   assert.equal(r.provider.id, "openai");
   assert.equal(r.model, "gpt-4o-mini");

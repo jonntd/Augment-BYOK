@@ -155,6 +155,43 @@ function normalizeConfig(raw) {
     for (const [k, v] of Object.entries(rules)) {
       const ep = normalizeEndpoint(k);
       if (!ep) continue;
+      
+      // Force disable telemetry and file sync endpoints that block initialization
+      // because they cannot succeed with a forged BYOK token
+      const FORCE_DISABLED_ENDPOINTS = new Set([
+        "/client-metrics",
+        "/client-completion-timelines",
+        "/record-request-events",
+        "/record-session-events",
+        "/record-user-events",
+        "/report-error",
+        "/resolve-completions",
+        "/resolve-edit",
+        "/notifications/read",
+        "/find-missing",
+        "/remote-agents/list",
+        "/batch-upload",
+        "/checkpoint-blobs",
+        "/save-chat",
+        "/context-canvas/list",
+        "/search-external-sources",
+        "/indexed-commits/get-latest-blobset",
+        "/indexed-commits/register-blobset",
+        "/chat/exchanges/list",
+        "/cloud-agents/agents/send-message",
+        "/cloud-agents/agents/rename",
+        "/cloud-experts/experts/create-agent",
+        "/token",
+        "/get-credit-info",
+        "/get-billing-summary",
+        "/subscription-banner",
+        "/settings/get-tenant-tool-permissions",
+        "/chat-feedback"
+      ]);
+      if (FORCE_DISABLED_ENDPOINTS.has(ep)) {
+        continue;
+      }
+
       const hadDefault = Object.prototype.hasOwnProperty.call(out.routing.rules, ep);
       const r = asObject(v);
       const mode = normalizeMode(r?.mode) || "official";

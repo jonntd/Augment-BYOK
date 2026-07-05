@@ -62,8 +62,7 @@ test("official-text-delegation: endpoint field-only bodies fail fast", async () 
     ["/completion", { prompt: "hello completion", suffix: "SUFFIX" }],
     ["/chat-input-completion", { prompt: "hello input" }],
     ["/prompt-enhancer", { message: "improve me" }],
-    ["/generate-commit-message-stream", { diff: "diff --git a/a b/a" }],
-    ["/next-edit-stream", { prefix: "const a = ", selected_text: "1", suffix: ";" }]
+    ["/generate-commit-message-stream", { diff: "diff --git a/a b/a" }]
   ]) {
     const res = await maybeBuildDelegatedTextPrompt({ endpoint, body });
     assert.equal(res.ok, false, endpoint);

@@ -16,7 +16,7 @@ test("official-delegation-core: execution delegation endpoint matcher accepts cu
   assert.equal(isOfficialExecutionDelegationEndpoint("/chat"), true);
   assert.equal(isOfficialExecutionDelegationEndpoint("/completion"), true);
   assert.equal(isOfficialExecutionDelegationEndpoint("/prompt-enhancer"), true);
-  assert.equal(isOfficialExecutionDelegationEndpoint("/next-edit-stream"), true);
+  assert.equal(isOfficialExecutionDelegationEndpoint("/next-edit-stream"), false);
   assert.equal(isOfficialExecutionDelegationEndpoint("/generate-commit-message-stream"), true);
   assert.equal(isOfficialExecutionDelegationEndpoint("/instruction-stream"), false);
   assert.equal(isOfficialExecutionDelegationEndpoint("/smart-paste-stream"), false);
