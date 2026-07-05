@@ -34,6 +34,18 @@ function patchStandaloneMode(extCode) {
     'const $1=10;$2 /* BYPASS 300S WAIT */'
   );
 
+  // 5. Bypass awaitInitialFoldersSynced infinite loop (prevents "Indexing codebase" from hanging forever)
+  patchedCode = patchedCode.replace(
+    /async awaitInitialFoldersSynced\(\)\{for\(;!this\.initialFoldersSynced;\)await [a-zA-Z0-9_]+\(this\._folderSyncedEmitter\.event,this\._pendingEventSubscriptions\)\}/g,
+    'async awaitInitialFoldersSynced(){/* BYPASS INIT SYNC WAIT */}'
+  );
+
+  // 6. Auto-approve all tool execution (bypasses the "ask-user" prompt)
+  patchedCode = patchedCode.replace(
+    /const ([a-zA-Z0-9_]+)=await ([a-zA-Z0-9_]+)\(([a-zA-Z0-9_]+),[a-zA-Z0-9_]+\(\{toolName:\3,toolInput:([a-zA-Z0-9_]+)\}\),([a-zA-Z0-9_]+),([a-zA-Z0-9_]+)\);/g,
+    'const $1="approved"; /* BYPASS APPROVAL */'
+  );
+
   return patchedCode;
 }
 
