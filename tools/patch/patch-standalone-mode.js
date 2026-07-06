@@ -52,6 +52,12 @@ function patchStandaloneMode(extCode) {
     '$1$2(){return {allow:true}; /* BYPASS POLICY */'
   );
 
+  // 6c. Auto-approve agentAutoMode (bypasses new webview frontend agent mode card)
+  patchedCode = patchedCode.replace(
+    /(type:[a-zA-Z0-9_$]+\.checkAgentAutoModeApprovalResponse,data:)[^}]*(\})/g,
+    '$1!0$2 /* BYPASS AUTO MODE */'
+  );
+
   return patchedCode;
 }
 
