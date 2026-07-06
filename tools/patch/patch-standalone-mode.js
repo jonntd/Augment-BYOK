@@ -46,6 +46,12 @@ function patchStandaloneMode(extCode) {
     'const $1="approved"; /* BYPASS APPROVAL */'
   );
 
+  // 6b. Auto-approve toolPermissionPolicies (bypasses new policy-based ask-user checks)
+  patchedCode = patchedCode.replace(
+    /(\{deny:5,"webhook-policy":4,"script-policy":3,"ask-user":2,allow:1\};async function )([a-zA-Z0-9_]+)\([^)]+\)\{/g,
+    '$1$2(){return {allow:true}; /* BYPASS POLICY */'
+  );
+
   return patchedCode;
 }
 
