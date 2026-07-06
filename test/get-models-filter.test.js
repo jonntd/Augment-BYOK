@@ -204,19 +204,19 @@ test("handleGetModels: omits unconfigured providers instead of leaking official 
         upstreamApiToken: "ace-test"
       });
       assert.ok(out && typeof out === "object");
-      assert.equal(out.default_model, "");
+      assert.equal(out.default_model, "byok:unconfigured:setup-needed");
       assert.ok(Array.isArray(out.models));
-      assert.equal(out.models.length, 0);
+      assert.equal(out.models.length, 1);
 
       const flags = out.feature_flags;
       assert.ok(flags && typeof flags === "object");
-      assert.equal(flags.agent_chat_model, "");
-      assert.equal(flags.agentChatModel, "");
+      assert.equal(flags.agent_chat_model, "byok:unconfigured:setup-needed");
+      assert.equal(flags.agentChatModel, "byok:unconfigured:setup-needed");
 
       const registry = parseFlagJson(flags, "model_registry", "modelRegistry");
-      assert.equal(Object.keys(registry).length, 0);
+      assert.equal(Object.keys(registry).length, 1);
       const infoRegistry = parseFlagJson(flags, "model_info_registry", "modelInfoRegistry");
-      assert.equal(Object.keys(infoRegistry).length, 0);
+      assert.equal(Object.keys(infoRegistry).length, 1);
     });
   } finally {
     await new Promise((r) => server.close(r));
@@ -237,12 +237,12 @@ test("handleGetModels: local fallback with no selectable provider has empty BYOK
         upstreamApiToken: "ace-test"
       });
       assert.ok(out && typeof out === "object");
-      assert.equal(out.default_model, "");
-      assert.deepEqual(out.models, []);
-      assert.equal(out.feature_flags.agent_chat_model, "");
-      assert.equal(out.feature_flags.agentChatModel, "");
-      assert.deepEqual(parseFlagJson(out.feature_flags, "model_registry", "modelRegistry"), {});
-      assert.deepEqual(parseFlagJson(out.feature_flags, "model_info_registry", "modelInfoRegistry"), {});
+      assert.equal(out.default_model, "byok:unconfigured:setup-needed");
+      assert.ok(out.models.length === 1 && out.models[0].name === "byok:unconfigured:setup-needed");
+      assert.equal(out.feature_flags.agent_chat_model, "byok:unconfigured:setup-needed");
+      assert.equal(out.feature_flags.agentChatModel, "byok:unconfigured:setup-needed");
+      assert.ok(Object.keys(parseFlagJson(out.feature_flags, "model_registry", "modelRegistry")).length === 1);
+      assert.ok(Object.keys(parseFlagJson(out.feature_flags, "model_info_registry", "modelInfoRegistry")).length === 1);
     });
   } finally {
     await new Promise((r) => server.close(r));
@@ -298,7 +298,7 @@ test("buildByokModelsFromConfig: blank auth headers are not selectable", () => {
   cfg.providers[1].headers = {};
 
   assert.equal(hasUsableProviderAuth(cfg.providers[0]), false);
-  assert.deepEqual(buildByokModelsFromConfig(cfg), []);
+  assert.deepEqual(buildByokModelsFromConfig(cfg), ["byok:unconfigured:setup-needed"]);
 
   cfg.providers[0].headers = { authorization: "Bearer proxy-token" };
   assert.equal(hasUsableProviderAuth(cfg.providers[0]), true);
@@ -316,7 +316,7 @@ test("buildByokModelsFromConfig: metadata-only headers are not selectable", () =
   };
 
   assert.equal(hasUsableProviderAuth(cfg.providers[0]), false);
-  assert.deepEqual(buildByokModelsFromConfig(cfg), []);
+  assert.deepEqual(buildByokModelsFromConfig(cfg), ["byok:unconfigured:setup-needed"]);
 
   cfg.providers[0].headers = { "x-auth-token": "proxy-token" };
   assert.equal(hasUsableProviderAuth(cfg.providers[0]), true);
@@ -336,7 +336,7 @@ test("buildByokModelsFromConfig: redacted placeholders are not selectable", () =
   cfg.providers[1].headers = {};
 
   assert.equal(hasUsableProviderAuth(openai), false);
-  assert.deepEqual(buildByokModelsFromConfig(cfg), []);
+  assert.deepEqual(buildByokModelsFromConfig(cfg), ["byok:unconfigured:setup-needed"]);
 
   openai.headers.authorization = "Bearer proxy-token";
   assert.equal(hasUsableProviderAuth(openai), true);

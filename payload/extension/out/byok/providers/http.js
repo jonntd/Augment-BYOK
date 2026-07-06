@@ -57,11 +57,55 @@ function joinBaseUrl(baseUrl, pathname) {
   }
 }
 
+let cachedProxyUrl = undefined;
+let cachedDispatcher = undefined;
+
+function getProxyDispatcher() {
+  try {
+    let proxyUrl = process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy;
+    
+    try {
+      const vscode = require("vscode");
+      const vp = vscode.workspace.getConfiguration("http").get("proxy");
+      if (typeof vp === "string" && vp.trim()) {
+        proxyUrl = vp.trim();
+      }
+    } catch {}
+
+    if (!proxyUrl) {
+      cachedProxyUrl = undefined;
+      cachedDispatcher = undefined;
+      return undefined;
+    }
+
+    if (proxyUrl === cachedProxyUrl && cachedDispatcher) {
+      return cachedDispatcher;
+    }
+
+    const { ProxyAgent } = require("undici");
+    cachedDispatcher = new ProxyAgent(proxyUrl);
+    cachedProxyUrl = proxyUrl;
+    return cachedDispatcher;
+  } catch (err) {
+    return undefined;
+  }
+}
+
 async function safeFetch(url, init, { timeoutMs, abortSignal, label } = {}) {
   if (typeof fetch !== "function") throw new Error("global fetch 不可用（需要 Node >= 18）");
   const { signal, cleanup, timedOut } = buildAbortSignal(timeoutMs, abortSignal);
+  
+  const options = { ...(init || {}), signal };
+  
+  if (!options.dispatcher) {
+    const dispatcher = getProxyDispatcher();
+    if (dispatcher) {
+      options.dispatcher = dispatcher;
+    }
+  }
+
   try {
-    return await fetch(url, { ...(init || {}), signal });
+    return await fetch(url, options);
   } catch (err) {
     if (err && typeof err === "object" && err.name === "AbortError") throw err;
     if (timedOut()) throw createAbortError(`Timeout while fetching ${label || url}`);

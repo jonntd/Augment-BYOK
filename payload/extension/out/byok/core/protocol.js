@@ -132,6 +132,11 @@ function buildByokModelsFromConfig(cfg) {
       if (pid && mid && selectableProviderIds.has(pid)) add(`byok:${pid}:${mid}`);
     }
   }
+  
+  if (out.length === 0) {
+    out.push("byok:unconfigured:setup-needed");
+  }
+
   return out;
 }
 

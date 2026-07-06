@@ -20,6 +20,7 @@ const { patchTasklistReorganizeNoopErrors } = require("../patch/patch-tasklist-r
 const { patchPackageJsonCommands } = require("../patch/patch-package-json-commands");
 const { patchWebviewHistorySummaryNode } = require("../patch/patch-webview-history-summary-node");
 const { patchWebviewAssetCacheBust } = require("../patch/patch-webview-asset-cache-bust");
+const { patchWebviewMuteAgentError } = require("../patch/patch-webview-mute-agent-error");
 const { patchStandaloneMode } = require("../patch/patch-standalone-mode");
 
 function makeLogger(prefix) {
@@ -52,6 +53,9 @@ function applyByokPatches({ repoRoot, extensionDir, pkgPath, extJsPath, logPrefi
 
   log(`patch webview asset cache bust`);
   patchWebviewAssetCacheBust(extDir, { buildId });
+
+  log(`patch webview mute agent config error`);
+  patchWebviewMuteAgentError(extDir);
 
   log(`patch package.json (commands)`);
   patchPackageJsonCommands(pkg);
