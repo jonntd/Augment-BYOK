@@ -103,6 +103,11 @@ function ensureModelRegistryFeatureFlags(existingFlags, { byokModelIds, defaultM
   flags.show_thinking_summary = true;
   flags.showThinkingSummary = true;
 
+  // Restore official Agent Auto toggle in chat (webview: isAgentic && enableAgentAutoMode).
+  // Without this, BYOK/local defaults leave the flag undefined → ?? false → Auto button hidden.
+  flags.enable_agent_auto_mode = true;
+  flags.enableAgentAutoMode = true;
+
   const fraudSign = pickFraudSignEndpointsFlag(flags);
   flags.fraud_sign_endpoints = fraudSign;
   flags.fraudSignEndpoints = fraudSign;
