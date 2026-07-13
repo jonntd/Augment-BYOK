@@ -235,6 +235,7 @@
         const officialTokenInput = normalizeStr(qs("#officialApiToken")?.value);
         if (officialTokenInput) cfg.official.apiToken = officialTokenInput;
         if (uiState.clearOfficialToken) cfg.official.apiToken = "";
+        cfg.official.disableContextInjection = Boolean(qs("#officialDisableContextInjection")?.checked);
         delete cfg.officialDelegation;
         delete cfg.prompts;
 

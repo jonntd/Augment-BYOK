@@ -235,10 +235,12 @@ test("callApi boundary: third_party_override is stripped before delegated text a
       }
     };
 
-    await assert.rejects(
-      async () => await maybeHandleCallApi({ endpoint: "/completion", body, timeoutMs: 1000 }),
-      /official text assembler delegation failed: invalid_request_body/
-    );
+    // Invalid completion body after stripping overrides: soft-fail empty items
+    // (status bar must not stick on "Failed to generate completion").
+    const out = await maybeHandleCallApi({ endpoint: "/completion", body, timeoutMs: 1000 });
+    assert.ok(out && typeof out === "object");
+    assert.ok(Array.isArray(out.completion_items));
+    assert.equal(out.completion_items.length, 0);
     assert.equal(Object.prototype.hasOwnProperty.call(body, "third_party_override"), true);
     assert.equal(Object.prototype.hasOwnProperty.call(body, "thirdPartyOverride"), true);
   });

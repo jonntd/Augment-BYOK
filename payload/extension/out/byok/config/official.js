@@ -22,7 +22,8 @@ function getOfficialConnection() {
   const off = cfg?.official && typeof cfg.official === "object" ? cfg.official : {};
   const completionURL = normalizeBaseUrl(normalizeString(off.completionUrl) || DEFAULT_OFFICIAL_COMPLETION_URL);
   const apiToken = normalizeRawToken(off.apiToken);
-  return { completionURL, apiToken };
+  const disableContextInjection = off.disableContextInjection === true || off.disable_context_injection === true;
+  return { completionURL, apiToken, disableContextInjection };
 }
 
 module.exports = { getOfficialConnection, DEFAULT_OFFICIAL_COMPLETION_URL };

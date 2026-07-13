@@ -148,6 +148,59 @@ function isEndpointFieldKey(key) {
   );
 }
 
+/**
+ * Official inline / chat-input completion bodies are field-shaped:
+ *   { prompt, suffix?, path?, lang?, ... }
+ * not chat messages[]. Without this path, /completion always throws and the
+ * status bar sticks on "Failed to generate completion".
+ */
+function tryFromPromptFields(rawBody) {
+  const b = isObject(rawBody) ? rawBody : {};
+  const prompt = normalizeString(b.prompt);
+  const message = normalizeString(b.message);
+  const instruction = normalizeString(b.instruction);
+  const text = prompt || message || instruction;
+  if (!text) return null;
+
+  const suffix = typeof b.suffix === "string" ? b.suffix : "";
+  const path = normalizeString(b.path);
+  const lang = normalizeString(b.lang ?? b.language);
+
+  // FIM-style editor completion (prompt = prefix at cursor).
+  if (prompt) {
+    const systemParts = [
+      "You are a code completion engine.",
+      "Continue the code at the cursor.",
+      "Return only the text to insert at the cursor.",
+      "Do not wrap the answer in markdown fences or explanations."
+    ];
+    if (path) systemParts.push(`File path: ${path}`);
+    if (lang) systemParts.push(`Language: ${lang}`);
+    if (suffix) {
+      systemParts.push("Code after the cursor is provided as SUFFIX; the completion must fit between PREFIX and SUFFIX.");
+    }
+
+    const userContent = suffix
+      ? `PREFIX:\n${prompt}\n\nSUFFIX:\n${suffix}\n\nInsert completion between PREFIX and SUFFIX.`
+      : `PREFIX:\n${prompt}\n\nInsert completion after PREFIX.`;
+
+    return {
+      ok: true,
+      system: systemParts.join("\n").trim(),
+      messages: [{ role: "user", content: userContent }],
+      source: "upstream.callApiBody.prompt_fields"
+    };
+  }
+
+  // prompt-enhancer / generic field-only bodies use message/instruction.
+  return {
+    ok: true,
+    system: "",
+    messages: [{ role: "user", content: text }],
+    source: "upstream.callApiBody.prompt_fields"
+  };
+}
+
 async function maybeBuildDelegatedTextPrompt({
   endpoint,
   body
@@ -157,7 +210,11 @@ async function maybeBuildDelegatedTextPrompt({
   if (isOfficialDelegationEndpoint(ep)) return { ok: false, reason: "chat_endpoint_use_chat_delegation" };
 
   const rawBody = isObject(body) ? body : {};
-  const delegated = tryFromMessages(rawBody) || tryFromResponsesInput(rawBody) || tryFromDeepSearch(rawBody);
+  const delegated =
+    tryFromMessages(rawBody) ||
+    tryFromResponsesInput(rawBody) ||
+    tryFromPromptFields(rawBody) ||
+    tryFromDeepSearch(rawBody);
 
   if (!delegated) {
     auditDelegationMiss(`official text assembler delegated miss: ep=${ep}`, "invalid_request_body");

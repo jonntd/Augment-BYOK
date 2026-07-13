@@ -2,7 +2,8 @@
   "version": 1,
   "official": {
     "completionUrl": "https://acemcp.heroman.wtf/relay/",
-    "apiToken": "your_registered_acemcp_token"
+    "apiToken": "your_registered_acemcp_token",
+    "disableContextInjection": false
   },
   "providers": [
     {

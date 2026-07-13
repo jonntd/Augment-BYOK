@@ -244,3 +244,44 @@ test("official external sources: auto path uses current search endpoint", async 
     await new Promise((r) => server.close(r));
   }
 });
+
+test("official context injection: disableContextInjection config skips network", async () => {
+  await withOfficialConfig(
+    { completionUrl: "https://official.invalid/base", apiToken: "secret-token", disableContextInjection: true },
+    async () => {
+      const { server, baseUrl, getCount } = await startCountingServer();
+      try {
+        const codebaseReq = {
+          message: "find relevant code",
+          blobs: { checkpoint_id: "cp1", added_blobs: ["src/a.js"], deleted_blobs: [] },
+          nodes: []
+        };
+        const canvasReq = { canvas_id: "canvas-1", nodes: [] };
+        const externalReq = { message: "find sources", nodes: [] };
+
+        const { result, calls } = await captureWarn(async () => ({
+          codebase: await maybeInjectOfficialCodebaseRetrieval({ req: codebaseReq, timeoutMs: 1000, upstreamCompletionURL: baseUrl, upstreamApiToken: "secret-token" }),
+          canvas: await maybeInjectOfficialContextCanvas({ req: canvasReq, timeoutMs: 1000, upstreamCompletionURL: baseUrl, upstreamApiToken: "secret-token" }),
+          external: await maybeInjectOfficialExternalSources({ req: externalReq, timeoutMs: 1000, upstreamCompletionURL: baseUrl, upstreamApiToken: "secret-token" })
+        }));
+
+        assert.deepEqual(result, { codebase: false, canvas: false, external: false });
+        assert.equal(getCount(), 0);
+        // Config kill-switch should not emit token-missing degradation warnings.
+        assert.deepEqual(calls, []);
+      } finally {
+        await new Promise((r) => server.close(r));
+      }
+    }
+  );
+});
+
+test("getOfficialConnection exposes disableContextInjection", async () => {
+  const { getOfficialConnection } = require("../payload/extension/out/byok/config/official");
+  await withOfficialConfig({ completionUrl: "https://x.example/", apiToken: "tok", disableContextInjection: true }, async () => {
+    const conn = getOfficialConnection();
+    assert.equal(conn.disableContextInjection, true);
+    assert.equal(conn.apiToken, "tok");
+  });
+});
+

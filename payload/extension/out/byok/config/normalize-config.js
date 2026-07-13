@@ -70,6 +70,11 @@ function normalizeConfig(raw) {
     const completionUrl = normalizeString(official.completionUrl);
     if (completionUrl) out.official.completionUrl = completionUrl;
     if (Object.prototype.hasOwnProperty.call(official, "apiToken")) out.official.apiToken = normalizeString(official.apiToken);
+    if (typeof official.disableContextInjection === "boolean") {
+      out.official.disableContextInjection = official.disableContextInjection;
+    } else if (typeof official.disable_context_injection === "boolean") {
+      out.official.disableContextInjection = official.disable_context_injection;
+    }
   }
 
   const historySummary = asObject(raw.historySummary);

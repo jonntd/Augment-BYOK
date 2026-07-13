@@ -57,7 +57,13 @@ function warnOfficialContextSkippedOnce(feature, missing) {
 }
 
 function isOfficialContextDisabled(req) {
-  return req && typeof req === "object" && (req.disable_retrieval === true || req.disableRetrieval === true);
+  if (req && typeof req === "object" && (req.disable_retrieval === true || req.disableRetrieval === true)) return true;
+  // Config-level kill switch for Context Engine auto-injection (keeps official token usable for /get-models).
+  try {
+    return getOfficialConnection().disableContextInjection === true;
+  } catch {
+    return false;
+  }
 }
 
 function normalizeUpstreamCompletionURL(value) {

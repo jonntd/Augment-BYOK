@@ -7,7 +7,10 @@ function defaultConfig() {
     version: 1,
     official: {
       completionUrl: "https://acemcp.heroman.wtf/relay/",
-      apiToken: ""
+      apiToken: "",
+      // When true: skip automatic official context injection (codebase-retrieval /
+      // context-canvas / external-sources) while still allowing /get-models with token.
+      disableContextInjection: false
     },
     historySummary: {
       enabled: false,

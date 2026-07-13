@@ -6,3 +6,8 @@ config.yaml
 
 webview.log
 vscode.log
+# hunkwise
+.vscode/hunkwise/
+
+# ReCode local database
+.recode

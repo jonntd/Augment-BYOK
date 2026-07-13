@@ -189,6 +189,10 @@
       ? `<span class="status-badge status-badge--success">token: set</span>`
       : `<span class="status-badge status-badge--warning">token: empty</span>`;
     const officialAssemblerBadge = `<span class="status-badge status-badge--success">assembler: official</span>`;
+    const contextInjectionDisabled = off.disableContextInjection === true;
+    const contextInjectionBadge = contextInjectionDisabled
+      ? `<span class="status-badge status-badge--warning">context: off</span>`
+      : `<span class="status-badge status-badge--success">context: on</span>`;
 
     const official = `
 	      <section class="settings-panel">
@@ -197,6 +201,7 @@
 		            <span>Official</span>
 		            ${completionUrlBadge}
 		            ${tokenBadge}
+		            ${contextInjectionBadge}
 		            ${officialAssemblerBadge}
 		          </div>
 	          <div class="flex-row" style="min-width:0;">
@@ -222,6 +227,13 @@
 	                <button class="btn btn--icon btn--danger" data-action="clearOfficialToken" title="清空 Token">✕</button>
 		              </div>
 		              <div class="text-muted text-xs">请到 <span class="text-mono">https://acemcp.heroman.wtf/login</span> 自行注册并填写 API Token；不再内置或随机分配 key。留空=不改；点击 ✕=清空（保存后生效）。</div>
+		            </div>
+		            <div class="form-group">
+		              <label class="form-label flex-row" style="gap:8px;align-items:center;">
+		                <input type="checkbox" id="officialDisableContextInjection" ${contextInjectionDisabled ? "checked" : ""} />
+		                <span>禁用 Context Engine 自动注入</span>
+		              </label>
+		              <div class="text-muted text-xs">关闭后 chat 前不再请求 <span class="text-mono">agents/codebase-retrieval</span> / <span class="text-mono">context-canvas</span> / <span class="text-mono">search-external-sources</span>。仍可用 Token 做 <span class="text-mono">/get-models</span>。</div>
 		            </div>
 		          </div>
 		        </div>

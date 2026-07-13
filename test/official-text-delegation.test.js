@@ -57,17 +57,46 @@ test("official-text-delegation: finds nested upstream body messages", async () =
   assert.deepEqual(res.messages, [{ role: "user", content: "SUMMARIZE_DIFF" }]);
 });
 
-test("official-text-delegation: endpoint field-only bodies fail fast", async () => {
-  for (const [endpoint, body] of [
-    ["/completion", { prompt: "hello completion", suffix: "SUFFIX" }],
-    ["/chat-input-completion", { prompt: "hello input" }],
-    ["/prompt-enhancer", { message: "improve me" }],
-    ["/generate-commit-message-stream", { diff: "diff --git a/a b/a" }]
-  ]) {
-    const res = await maybeBuildDelegatedTextPrompt({ endpoint, body });
-    assert.equal(res.ok, false, endpoint);
-    assert.equal(res.reason, "invalid_request_body", endpoint);
-  }
+test("official-text-delegation: completion prompt/suffix field bodies succeed", async () => {
+  const withSuffix = await maybeBuildDelegatedTextPrompt({
+    endpoint: "/completion",
+    body: { prompt: "hello completion", suffix: "SUFFIX", path: "a.ts", lang: "typescript" }
+  });
+  assert.equal(withSuffix.ok, true);
+  assert.equal(withSuffix.source, "upstream.callApiBody.prompt_fields");
+  assert.equal(withSuffix.messages.length, 1);
+  assert.equal(withSuffix.messages[0].role, "user");
+  assert.match(withSuffix.messages[0].content, /PREFIX:[\s\S]*hello completion/);
+  assert.match(withSuffix.messages[0].content, /SUFFIX:[\s\S]*SUFFIX/);
+  assert.match(withSuffix.system, /code completion/i);
+  assert.match(withSuffix.system, /a\.ts/);
+
+  const inputOnly = await maybeBuildDelegatedTextPrompt({
+    endpoint: "/chat-input-completion",
+    body: { prompt: "hello input" }
+  });
+  assert.equal(inputOnly.ok, true);
+  assert.equal(inputOnly.source, "upstream.callApiBody.prompt_fields");
+  assert.match(inputOnly.messages[0].content, /hello input/);
+});
+
+test("official-text-delegation: prompt-enhancer message field succeeds", async () => {
+  const res = await maybeBuildDelegatedTextPrompt({
+    endpoint: "/prompt-enhancer",
+    body: { message: "improve me" }
+  });
+  assert.equal(res.ok, true);
+  assert.equal(res.source, "upstream.callApiBody.prompt_fields");
+  assert.deepEqual(res.messages, [{ role: "user", content: "improve me" }]);
+});
+
+test("official-text-delegation: field-only bodies without prompt/message still fail", async () => {
+  const res = await maybeBuildDelegatedTextPrompt({
+    endpoint: "/generate-commit-message-stream",
+    body: { diff: "diff --git a/a b/a" }
+  });
+  assert.equal(res.ok, false);
+  assert.equal(res.reason, "invalid_request_body");
 });
 
 test("official-text-delegation: chat endpoint is rejected (chat delegation handled elsewhere)", async () => {
@@ -128,5 +157,5 @@ test("official-text-delegation: audit logs emit without debug mode", async () =>
   }
 
   assert.equal(lines.some((line) => line.includes("official text assembler delegated: ep=/completion source=upstream.callApiBody.messages")), true);
-  assert.equal(lines.some((line) => line.includes("official text assembler delegated miss: ep=/completion reason=invalid_request_body")), true);
+  assert.equal(lines.some((line) => line.includes("official text assembler delegated: ep=/completion source=upstream.callApiBody.prompt_fields")), true);
 });

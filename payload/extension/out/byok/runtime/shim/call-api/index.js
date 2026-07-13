@@ -92,8 +92,27 @@ async function completeTextForEndpoint({ cfg, route, ep, body, timeoutMs, abortS
 }
 
 async function handleCompletion({ cfg, route, ep, body, transform, timeoutMs, abortSignal, requestId }) {
-  const text = await completeTextForEndpoint({ cfg, route, ep, body, timeoutMs, abortSignal, requestId, kind: "complete" });
-  return safeTransform(transform, makeBackCompletionResult(text), ep);
+  try {
+    const text = await completeTextForEndpoint({ cfg, route, ep, body, timeoutMs, abortSignal, requestId, kind: "complete" });
+    return safeTransform(transform, makeBackCompletionResult(text), ep);
+  } catch (err) {
+    // Upstream status bar sticks on "Failed to generate completion" for any thrown error.
+    // Soft-fail with empty items so the UI recovers instead of staying red forever.
+    const msg = err instanceof Error ? err.message : String(err);
+    warn("completion soft-failed; returning empty completion_items", { requestId, endpoint: ep, error: msg });
+    return safeTransform(
+      transform,
+      {
+        completion_items: [],
+        unknown_blob_names: [],
+        checkpoint_not_found: false,
+        suggested_prefix_char_count: 0,
+        suggested_suffix_char_count: 0,
+        completion_timeout_ms: Number.isFinite(Number(timeoutMs)) ? Number(timeoutMs) : 0
+      },
+      ep
+    );
+  }
 }
 
 async function handleChat({ cfg, route, ep, body, transform, timeoutMs, abortSignal, upstreamApiToken, upstreamCompletionURL, requestId }) {
