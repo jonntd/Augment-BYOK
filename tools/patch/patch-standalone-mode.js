@@ -40,6 +40,25 @@ function patchStandaloneMode(extCode) {
     'async awaitInitialFoldersSynced(){/* BYPASS INIT SYNC WAIT */}'
   );
 
+  // 5b. Short-circuit find-missing so DiskFileManager can drain itemsInFlight.
+  // Without this, probe/upload keeps retrying the official backend and the status bar
+  // stays on "Augment is indexing your codebase" for a very long time.
+  // Keep a dead callApi(...,"find-missing") so endpoint catalog analysis still sees the endpoint.
+  const findMissingEmpty =
+    'async findMissing(){return {unknownBlobNames:[],nonindexedBlobNames:[]}; /* BYPASS FIND MISSING */this.callApi(0,0,"find-missing")}';
+  patchedCode = replaceOnce(
+    patchedCode,
+    'async findMissing(t,r){const n=await this.clientConfig.getConfig(),i=this.createRequestId(),a=[...t].sort();return await this.apiRetry.retryWithRetryAfter("find-missing",async()=>await this.callApi(i,n,"find-missing",{model:r,mem_object_names:a},h0r))}',
+    findMissingEmpty,
+    "standalone findMissing(t,r)"
+  );
+  patchedCode = replaceOnce(
+    patchedCode,
+    'async findMissing(t){const r=this._configListener.config,n=this.createRequestId(),i=r.modelName,a=[...t].sort();return await this.apiRetry.retryWithRetryAfter("find-missing",async()=>await this.callApi(n,r,"find-missing",{model:i,mem_object_names:a},s=>this.toFindMissingResult(s)))}',
+    findMissingEmpty,
+    "standalone findMissing(t)"
+  );
+
   // 6. Auto-approve all tool execution (bypasses the "ask-user" prompt)
   patchedCode = patchedCode.replace(
     /const ([a-zA-Z0-9_]+)=await ([a-zA-Z0-9_]+)\(([a-zA-Z0-9_]+),[a-zA-Z0-9_]+\(\{toolName:\3,toolInput:([a-zA-Z0-9_]+)\}\),([a-zA-Z0-9_]+),([a-zA-Z0-9_]+)\);/g,
