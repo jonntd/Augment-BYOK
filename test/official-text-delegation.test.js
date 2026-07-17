@@ -68,7 +68,7 @@ test("official-text-delegation: completion prompt/suffix field bodies succeed", 
   assert.equal(withSuffix.messages[0].role, "user");
   assert.match(withSuffix.messages[0].content, /PREFIX:[\s\S]*hello completion/);
   assert.match(withSuffix.messages[0].content, /SUFFIX:[\s\S]*SUFFIX/);
-  assert.match(withSuffix.system, /code completion/i);
+  assert.match(withSuffix.system, /代码补全/i);
   assert.match(withSuffix.system, /a\.ts/);
 
   const inputOnly = await maybeBuildDelegatedTextPrompt({
@@ -90,13 +90,15 @@ test("official-text-delegation: prompt-enhancer message field succeeds", async (
   assert.deepEqual(res.messages, [{ role: "user", content: "improve me" }]);
 });
 
-test("official-text-delegation: field-only bodies without prompt/message still fail", async () => {
+test("official-text-delegation: commit-message bodies with diff succeed", async () => {
   const res = await maybeBuildDelegatedTextPrompt({
     endpoint: "/generate-commit-message-stream",
     body: { diff: "diff --git a/a b/a" }
   });
-  assert.equal(res.ok, false);
-  assert.equal(res.reason, "invalid_request_body");
+  assert.equal(res.ok, true);
+  assert.equal(res.source, "upstream.callApiBody.commit_message_fields");
+  assert.ok(Array.isArray(res.messages) && res.messages.length > 0);
+  assert.ok(res.messages[0].content.includes("diff --git a/a b/a"));
 });
 
 test("official-text-delegation: chat endpoint is rejected (chat delegation handled elsewhere)", async () => {

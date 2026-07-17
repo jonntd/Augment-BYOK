@@ -8,6 +8,42 @@ const { REQUEST_NODE_TEXT, REQUEST_NODE_TOOL_RESULT } = require("../../core/augm
 
 const OFFICIAL_CONTEXT_SKIP_WARNED = new Set();
 
+const OFFICIAL_CONTEXT_TOOL_NAMES = new Set([]);
+
+const OFFICIAL_CONTEXT_CONFIG_GATED_TOOL_NAMES = new Set([
+  "codebase-retrieval",
+  "context-canvas",
+  "external-sources"
+]);
+
+function filterOfficialContextToolDefinitions(toolDefinitions) {
+  if (!Array.isArray(toolDefinitions)) return toolDefinitions;
+
+  const configGated = (() => {
+    try {
+      return getOfficialConnection().disableContextInjection === true;
+    } catch {
+      return false;
+    }
+  })();
+
+  return toolDefinitions.filter((def) => {
+    if (!def || typeof def !== "object") return false;
+    const name = normalizeString(def.name || "");
+    const mcpServerName = normalizeString(def.mcp_server_name || def.mcpServerName || "");
+    const mcpToolName = normalizeString(def.mcp_tool_name || def.mcpToolName || "");
+    if (OFFICIAL_CONTEXT_TOOL_NAMES.has(name)) return false;
+    if (OFFICIAL_CONTEXT_TOOL_NAMES.has(mcpServerName)) return false;
+    if (OFFICIAL_CONTEXT_TOOL_NAMES.has(mcpToolName)) return false;
+    if (configGated) {
+      if (OFFICIAL_CONTEXT_CONFIG_GATED_TOOL_NAMES.has(name)) return false;
+      if (OFFICIAL_CONTEXT_CONFIG_GATED_TOOL_NAMES.has(mcpServerName)) return false;
+      if (OFFICIAL_CONTEXT_CONFIG_GATED_TOOL_NAMES.has(mcpToolName)) return false;
+    }
+    return true;
+  });
+}
+
 function makeTextRequestNode({ id, text }) {
   return { id: Number(id) || 0, type: REQUEST_NODE_TEXT, content: "", text_node: { content: String(text || "") } };
 }
@@ -90,6 +126,7 @@ function resolveOfficialContextConnection({ feature, upstreamCompletionURL, upst
 }
 
 module.exports = {
+  filterOfficialContextToolDefinitions,
   makeTextRequestNode,
   pickInjectionTargetArray,
   maybeInjectUserExtraTextParts,

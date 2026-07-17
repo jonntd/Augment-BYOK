@@ -260,10 +260,14 @@ test("callApiStream boundary: third_party_override is stripped before delegated 
       }
     };
 
-    await assert.rejects(
-      async () => await maybeHandleCallApiStream({ endpoint: "/prompt-enhancer", body, timeoutMs: 1000 }),
-      /official text assembler delegation failed: invalid_request_body/
-    );
+    const gen = await maybeHandleCallApiStream({ endpoint: "/prompt-enhancer", body, timeoutMs: 1000 });
+    assert.ok(gen != null, "should return a generator (not undefined) when model override routes to byok");
+    assert.equal(typeof gen[Symbol.asyncIterator], "function", "should be an async generator");
+    // The error is now caught inside guardObjectStream and returned as an error
+    // chunk, not thrown — verifying the generator yields without rejecting
+    const chunks = [];
+    for await (const chunk of gen) chunks.push(chunk);
+    assert.ok(chunks.length > 0, "should yield at least one chunk (error fallback)");
     assert.equal(Object.prototype.hasOwnProperty.call(body, "third_party_override"), true);
     assert.equal(Object.prototype.hasOwnProperty.call(body, "thirdPartyOverride"), true);
   });

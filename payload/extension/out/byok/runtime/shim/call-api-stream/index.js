@@ -65,8 +65,11 @@ async function handleChatStream({ cfg, route, ep, body, transform, timeoutMs, ab
 }
 
 async function handleChatResultDeltaStream({ cfg, route, ep, body, transform, timeoutMs, abortSignal, requestId }) {
-  const deltas = await makeByokTextDeltas({ cfg, route, ep, body, timeoutMs, abortSignal, requestId, labelSuffix: "delta" });
-  const src = wrapChatResultTextDeltas(deltas);
+  async function* lazyDeltas() {
+    const d = await makeByokTextDeltas({ cfg, route, ep, body, timeoutMs, abortSignal, requestId, labelSuffix: "delta" });
+    yield* d;
+  }
+  const src = wrapChatResultTextDeltas(lazyDeltas());
 
   return guardWithMeta({
     ep,

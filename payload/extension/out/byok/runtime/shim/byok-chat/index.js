@@ -1,5 +1,6 @@
 "use strict";
 
+const { filterOfficialContextToolDefinitions } = require("../../official/common");
 const { withTiming } = require("../../../infra/trace");
 const { makeBackChatResult } = require("../../../core/protocol");
 const { completeAugmentChatTextByProviderType } = require("../../../core/provider-augment-chat");
@@ -23,6 +24,11 @@ async function byokChat({ cfg, provider, model, requestedModel, body, timeoutMs,
     requestId
   });
   if (ctx.empty) return makeBackChatResult("", { nodes: [], meta: ctx.responseMeta });
+
+  // Apply config-level kill switch: remove official context tool definitions.
+  if (Array.isArray(ctx.req.tool_definitions)) {
+    ctx.req.tool_definitions = filterOfficialContextToolDefinitions(ctx.req.tool_definitions);
+  }
 
   const text = await withTiming(ctx.traceLabel, async () =>
     await completeAugmentChatTextByProviderType({
