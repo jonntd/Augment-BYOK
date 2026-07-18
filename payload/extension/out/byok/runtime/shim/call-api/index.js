@@ -66,6 +66,21 @@ async function handleGetModels({ cfg, ep, transform, abortSignal, timeoutMs, ups
     delete scrubbedFlags.model_info_registry;
     delete scrubbedFlags.modelInfoRegistry;
 
+    // When user disabled Context Engine injection, also strip Context Engine
+    // feature flags so the client-side webview doesn't initialize it.
+    if (off.disableContextInjection === true) {
+      const contextEngineFlagKeys = [
+        "enable_context_engine", "enableContextEngine",
+        "context_engine_enabled", "contextEngineEnabled",
+        "enable_codebase_indexing", "enableCodebaseIndexing",
+        "codebase_indexing_enabled", "codebaseIndexingEnabled",
+        "enable_workspace_index", "enableWorkspaceIndex"
+      ];
+      for (const key of contextEngineFlagKeys) {
+        delete scrubbedFlags[key];
+      }
+    }
+
     const flags = ensureModelRegistryFeatureFlags(scrubbedFlags, { byokModelIds: byokModels, defaultModel, agentChatModel: defaultModel });
     const models = byokModels.map(makeModelInfo);
 
